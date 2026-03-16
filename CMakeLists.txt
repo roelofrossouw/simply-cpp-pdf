@@ -26,13 +26,6 @@ set(USE_BUNDLED FALSE)
 set(USE_UNBUNDLED_FALLBACK_BUNDLED TRUE)
 add_subdirectory(third_party/pdf-writer pdf-writer EXCLUDE_FROM_ALL)
 
-
-# git remote add scpp https://github.com/roelofrossouw/simply-cpp.git
-# git stash; git subtree add --prefix=third_party/scpp scpp main --squash; git stash pop
-# (Update with:   git fetch scpp main; git stash; git subtree pull --prefix=third_party/scpp scpp main --squash; git stash pop)
-add_subdirectory(third_party/scpp scpp EXCLUDE_FROM_ALL)
-
-
 project(sc-pdf)
 add_library(${PROJECT_NAME} SHARED
         src/pdf.cpp
