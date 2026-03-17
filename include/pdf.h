@@ -25,13 +25,18 @@ namespace sc {
 
         bool DrawImage(const std::string &filename);
 
-        bool DrawText(const std::string &text, const rect &pos, const double &fontsize = 10, const font_spec &font = font_spec("Arial"));
+        bool MoreText(const std::string &text, const rect &pos);
+
+        bool DrawText(const std::string &text, const rect &pos, const double &fontsize = 10, const font_spec &font = font_spec("Roboto"),
+                      const color &col = color(0, 0, 0));
 
         void NewPage();
 
-        void DrawLine(const rect &pos);
+        auto DrawLine(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1}) -> void;
 
-        void DrawRect(const rect &pos);
+        void StrokeRect(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1});
+
+        void FillRect(const rect &pos, const color &col = {0, 0, 0, 1});
 
         void DrawObject();
 
@@ -44,6 +49,12 @@ namespace sc {
         double PageWidth() const;
 
         void TestEmoji() const;
+
+        double TextWidth(const std::string &text, const font_spec &font, float size) const;
+
+        double TextXHeight(const font_spec &font) const;
+
+        double TextCapHeight(const font_spec &font) const;
 
     private:
         hummus_impl *impl{};

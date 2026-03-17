@@ -39,6 +39,17 @@ namespace sc {
     protected:
         double x, y, w, h;
     };
+
+    class color {
+    public:
+        double c, m, y, k;
+
+        color(double c, double m, double y, double k);
+
+        color(double r, double g, double b);
+
+        static color from_web(int r, int g, int b, int a);
+    };
 } // sc
 
 #endif //BASE_TYPES_H
