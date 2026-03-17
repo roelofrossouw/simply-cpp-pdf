@@ -3,6 +3,7 @@
 #include "base_types.h"
 #include "font_spec.h"
 
+
 namespace sc {
     class hummus_impl;
 
@@ -55,6 +56,10 @@ namespace sc {
         double TextXHeight(const font_spec &font) const;
 
         double TextCapHeight(const font_spec &font) const;
+
+        void SetPage(unsigned int page_number);
+
+        unsigned int PageCount() const;
 
     private:
         hummus_impl *impl{};

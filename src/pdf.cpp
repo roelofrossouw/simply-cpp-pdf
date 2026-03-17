@@ -23,9 +23,11 @@ namespace sc {
         PDFWriter *pdfWriter;
         PDFPage *pdfPage;
         PageContentContext *pageContentContext;
-        page_size size;
-        double width;
-        double height;
+        page_size size{};
+        vector<pair<PDFPage *, PageContentContext *> > pages;
+        double width{};
+        double height{};
+        unsigned int current_page = 0;
 
         double page_width() const {
             switch (size) {
@@ -50,10 +52,14 @@ namespace sc {
         }
 
         void create_page(page_size new_size = Default) {
+            // if (pageContentContext)
+            //     if (eSuccess != pdfWriter->EndPageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
+            // if (pdfPage)
+            //     if (eSuccess != pdfWriter->WritePageAndRelease(pdfPage)) cerr << "Error ending PDF Page";
+
+
             if (pageContentContext)
-                if (eSuccess != pdfWriter->EndPageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
-            if (pdfPage)
-                if (eSuccess != pdfWriter->WritePageAndRelease(pdfPage)) cerr << "Error ending PDF Page";
+                if (eSuccess != pdfWriter->PausePageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
 
             if (new_size != Default) size = new_size;
 
@@ -62,6 +68,8 @@ namespace sc {
             height = page_height();
             pdfPage->SetMediaBox({0, 0, width, height});
             pageContentContext = pdfWriter->StartPageContentContext(pdfPage);
+            pages.emplace_back(pdfPage, pageContentContext);
+            current_page = pages.size();
         }
 
 
@@ -75,11 +83,29 @@ namespace sc {
             return font;
         }
 
+        void SetPage(unsigned int page_number) {
+            if (current_page == page_number) return;
+            while (pages.size() < page_number) create_page();
+            if (pageContentContext) pdfWriter->PausePageContentContext(pageContentContext);
+            pdfPage = pages[page_number - 1].first;
+            pageContentContext = pages[page_number - 1].second;
+            width = page_width();
+            height = page_height();
+            current_page = page_number;
+        }
+
         hummus_impl(const page_size size = A4) : pdfWriter(new PDFWriter()), pdfPage(nullptr), pageContentContext(nullptr) {
             create_page(size);
         }
 
-        ~hummus_impl() { delete pdfWriter; }
+        ~hummus_impl() {
+            for (auto &page: pages) {
+                pdfWriter->EndPageContentContext(page.second);
+                pdfWriter->WritePageAndRelease(page.first);
+            }
+            if (eSuccess != pdfWriter->EndPDF()) cerr << "Error ending PDF";
+            delete pdfWriter;
+        }
 
         // private:
         font_collection fc;
@@ -98,9 +124,9 @@ namespace sc {
     }
 
     pdf::~pdf() {
-        if (eSuccess != impl->pdfWriter->EndPageContentContext(impl->pageContentContext)) cerr << "Error ending Page Page Context";
-        if (eSuccess != impl->pdfWriter->WritePageAndRelease(impl->pdfPage)) cerr << "Error ending PDF Page";
-        if (eSuccess != impl->pdfWriter->EndPDF()) cerr << "Error ending PDF";
+        // if (eSuccess != impl->pdfWriter->EndPageContentContext(impl->pageContentContext)) cerr << "Error ending Page Page Context";
+        // if (eSuccess != impl->pdfWriter->WritePageAndRelease(impl->pdfPage)) cerr << "Error ending PDF Page";
+        // if (eSuccess != impl->pdfWriter->EndPDF()) cerr << "Error ending PDF";
         delete impl;
     }
 
@@ -289,5 +315,13 @@ namespace sc {
         auto result = impl->get_font(font)->GetFreeTypeFont()->GetCapHeight();
         if (result.first) return result.second;
         return 0;
+    }
+
+    void pdf::SetPage(unsigned int page_number) {
+        impl->SetPage(page_number);
+    }
+
+    unsigned int pdf::PageCount() const {
+        return impl->pages.size();
     }
 }
