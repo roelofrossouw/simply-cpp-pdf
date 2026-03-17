@@ -69,23 +69,11 @@ namespace sc {
             auto font = fc.get_font(font_spec);
             if (font) return font;
             auto font_file = fc.get_font_file(font_spec);
-
-            // font = pdfWriter->GetFontForFile(font_file, 6);
-            // if (!font) font = pdfWriter->GetFontForFile(font_file, 5);
-            // if (!font) font = pdfWriter->GetFontForFile(font_file, 4);
-            // if (!font) font = pdfWriter->GetFontForFile(font_file, 3);
-            // if (!font) font = pdfWriter->GetFontForFile(font_file, 2);
             font = pdfWriter->GetFontForFile(font_file, 0);
-            // if (!font || !font->GetFreeTypeFont()->IsValid()) {
-            //     std::cout << "Invalid font, trying to load default" << std::endl;
-            //     font = pdfWriter->GetFontForFile(font_file, 0);
-            // }
-            // std::cout << font->GetFreeTypeFont()->GetFontWeight() << std::endl;
-            font->GetFreeTypeFont()->GetFontFlags();
+            // font->GetFreeTypeFont()->GetFontFlags();
             fc.add_font(font_spec, font);
-
             return font;
-        };
+        }
 
         hummus_impl(const page_size size = A4) : pdfWriter(new PDFWriter()), pdfPage(nullptr), pageContentContext(nullptr) {
             create_page(size);
@@ -131,10 +119,19 @@ namespace sc {
         return true;
     }
 
-    bool pdf::DrawText(const string &text, const rect &pos, const double &fontsize, const font_spec &font) {
+    bool pdf::MoreText(const string &text, const rect &pos) {
         const pdf_rect position{pos, impl->height};
         impl->pageContentContext->BT();
-        impl->pageContentContext->k(0, 0, 0, 1);
+        impl->pageContentContext->Td(position.left(), position.bottom());
+        impl->pageContentContext->Tj(text);
+        impl->pageContentContext->ET();
+        return true;
+    }
+
+    bool pdf::DrawText(const string &text, const rect &pos, const double &fontsize, const font_spec &font, const color &col) {
+        const pdf_rect position{pos, impl->height};
+        impl->pageContentContext->BT();
+        impl->pageContentContext->k(col.c, col.m, col.y, col.k);
         impl->pageContentContext->Tf(impl->get_font(font), fontsize);
         impl->pageContentContext->Td(position.left(), position.bottom());
 
@@ -175,12 +172,12 @@ namespace sc {
         impl->create_page();
     }
 
-    void pdf::DrawLine(const rect &pos) {
+    void pdf::DrawLine(const rect &pos, double width, const color &col) {
         const pdf_rect rect{pos, impl->height};
 
         impl->pageContentContext->q();
-        impl->pageContentContext->w(2);
-        impl->pageContentContext->K(0, 0, 1, 0);
+        impl->pageContentContext->w(width);
+        impl->pageContentContext->K(col.c, col.m, col.y, col.k);
 
         impl->pageContentContext->m(rect.left(), rect.bottom());
         impl->pageContentContext->l(rect.right(), rect.top());
@@ -189,10 +186,20 @@ namespace sc {
         impl->pageContentContext->Q();
     }
 
-    void pdf::DrawRect(const rect &pos) {
+    void pdf::StrokeRect(const rect &pos, double width, const color &col) {
         const pdf_rect rect{pos, impl->height};
         impl->pageContentContext->q();
-        impl->pageContentContext->k(0, 1, 0, 0);
+        impl->pageContentContext->w(width);
+        impl->pageContentContext->K(col.c, col.m, col.y, col.k);
+        impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
+        impl->pageContentContext->s();
+        impl->pageContentContext->Q();
+    }
+
+    void pdf::FillRect(const rect &pos, const color &col) {
+        const pdf_rect rect{pos, impl->height};
+        impl->pageContentContext->q();
+        impl->pageContentContext->k(col.c, col.m, col.y, col.k);
         impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
         impl->pageContentContext->f();
         impl->pageContentContext->Q();
@@ -266,5 +273,21 @@ namespace sc {
         AbstractContentContext::TextOptions textOptions(font, 48, AbstractContentContext::eGray, 0);
         impl->pageContentContext->WriteText(75, 300, "\xe2\x9a\x93\xe2\x9a\x94\xe2\x98\xba\xf0\x9f\x98\xa8", textOptions);
         impl->pageContentContext->WriteText(75, 350, "😂🤷🤞🤪", textOptions);
+    }
+
+    double pdf::TextWidth(const std::string &text, const font_spec &font, const float size) const {
+        return impl->get_font(font)->CalculateTextAdvance(text, size);
+    }
+
+    double pdf::TextXHeight(const font_spec &font) const {
+        auto result = impl->get_font(font)->GetFreeTypeFont()->GetxHeight();
+        if (result.first) return result.second;
+        return 0;
+    }
+
+    double pdf::TextCapHeight(const font_spec &font) const {
+        auto result = impl->get_font(font)->GetFreeTypeFont()->GetCapHeight();
+        if (result.first) return result.second;
+        return 0;
     }
 }
