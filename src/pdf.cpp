@@ -52,17 +52,8 @@ namespace sc {
         }
 
         void create_page(page_size new_size = Default) {
-            // if (pageContentContext)
-            //     if (eSuccess != pdfWriter->EndPageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
-            // if (pdfPage)
-            //     if (eSuccess != pdfWriter->WritePageAndRelease(pdfPage)) cerr << "Error ending PDF Page";
-
-
-            if (pageContentContext)
-                if (eSuccess != pdfWriter->PausePageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
-
+            if (pageContentContext) if (eSuccess != pdfWriter->PausePageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
             if (new_size != Default) size = new_size;
-
             pdfPage = new PDFPage();
             width = page_width();
             height = page_height();
@@ -130,6 +121,10 @@ namespace sc {
         delete impl;
     }
 
+    void pdf::NewPage() {
+        impl->create_page();
+    }
+
     bool pdf::DrawImage(const std::string &filename) {
         // Create an image object from image
         PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromJPGFile(filename);
@@ -160,75 +155,55 @@ namespace sc {
         impl->pageContentContext->k(col.c, col.m, col.y, col.k);
         impl->pageContentContext->Tf(impl->get_font(font), fontsize);
         impl->pageContentContext->Td(position.left(), position.bottom());
-
-
-        // More advanced with Tm sizing:
-        // A - Char width (Value of 2 makes text double wide)
-        // B - Rise (value of 1 makes text go higher at 45º)
-        // C - Lean (value of 1 makes text very italic at 45º)
-        // D - Char height (Value of 2 makes text double high)
-        // impl->pageContentContext->Tm(1, 0, 0, 1, position.left(), position.bottom());
-
-
-        // If center align:
-        // auto adv = arialTTF->CalculateTextAdvance(text, fontsize);
-        // impl->pageContentContext->Tm(1, 0, 0, 1, rect.center() - adv/2, rect.bottom());
-
-
         impl->pageContentContext->Tj(text);
-
-        // impl->pageContentContext->Tr(1);
-        // impl->pageContentContext->Tj("Text with 1 rendering mode");
-
-        // impl->pageContentContext->TL(fontsize*1.2);
-        // impl->pageContentContext->Tj("Some");
-        // impl->pageContentContext->Quote("Multiline");
-        // impl->pageContentContext->Quote("Text");
-
-
-        // GlyphUnicodeMappingList glyphs;
-        // glyphs.emplace_back(61, 'Z'); //
-        // impl->pageContentContext->Tj(glyphs);
-
         impl->pageContentContext->ET();
         return true;
     }
 
-    void pdf::NewPage() {
-        impl->create_page();
-    }
-
     void pdf::DrawLine(const rect &pos, double width, const color &col) {
         const pdf_rect rect{pos, impl->height};
-
         impl->pageContentContext->q();
         impl->pageContentContext->w(width);
         impl->pageContentContext->K(col.c, col.m, col.y, col.k);
-
         impl->pageContentContext->m(rect.left(), rect.bottom());
         impl->pageContentContext->l(rect.right(), rect.top());
         impl->pageContentContext->s();
-
         impl->pageContentContext->Q();
     }
 
-    void pdf::StrokeRect(const rect &pos, double width, const color &col) {
+    void pdf::DrawRect(const rect &pos, double width, const color &col, double radius, bool filled = false) {
         const pdf_rect rect{pos, impl->height};
         impl->pageContentContext->q();
-        impl->pageContentContext->w(width);
-        impl->pageContentContext->K(col.c, col.m, col.y, col.k);
-        impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
-        impl->pageContentContext->s();
+        if (width > 0) impl->pageContentContext->w(width);
+        if (filled) impl->pageContentContext->k(col.c, col.m, col.y, col.k);
+        else impl->pageContentContext->K(col.c, col.m, col.y, col.k);
+        if (radius > 0) {
+            radius = min(radius, min(rect.width() / 2, rect.height() / 2));
+            double control = radius * 0.448216; // Control points needed on cubic bezier curve to form a quarter circle.
+            impl->pageContentContext->m(rect.left() + radius, rect.bottom());
+            impl->pageContentContext->l(rect.right() - radius, rect.bottom());
+            impl->pageContentContext->c(rect.right() - control, rect.bottom(), rect.right(), rect.bottom() + control, rect.right(), rect.bottom() + radius);
+            impl->pageContentContext->l(rect.right(), rect.top() - radius);
+            impl->pageContentContext->c(rect.right(), rect.top() - control, rect.right() - control, rect.top(), rect.right() - radius, rect.top());
+            impl->pageContentContext->l(rect.left() + radius, rect.top());
+            impl->pageContentContext->c(rect.left() + control, rect.top(), rect.left(), rect.top() - control, rect.left(), rect.top() - radius);
+            impl->pageContentContext->l(rect.left(), rect.bottom() + radius);
+            impl->pageContentContext->c(rect.left(), rect.bottom() + control, rect.left() + control, rect.bottom(), rect.left() + radius, rect.bottom());
+            impl->pageContentContext->h();
+        } else {
+            impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
+        }
+        if (filled) impl->pageContentContext->f();
+        else impl->pageContentContext->s();
         impl->pageContentContext->Q();
     }
 
-    void pdf::FillRect(const rect &pos, const color &col) {
-        const pdf_rect rect{pos, impl->height};
-        impl->pageContentContext->q();
-        impl->pageContentContext->k(col.c, col.m, col.y, col.k);
-        impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
-        impl->pageContentContext->f();
-        impl->pageContentContext->Q();
+    void pdf::StrokeRect(const rect &pos, double width, const color &col, const double radius) {
+        DrawRect(pos, width, col, radius, false);
+    }
+
+    void pdf::FillRect(const rect &pos, const color &col, const double radius) {
+        DrawRect(pos, 0, col, radius, true);
     }
 
     void pdf::DrawObject() {
