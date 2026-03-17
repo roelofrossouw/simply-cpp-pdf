@@ -1,9 +1,9 @@
 #include "pdf.h"
 
 void draw_content_on_pdf_page(sc::pdf &pdf, sc::rect &pos) {
-    pdf.StrokeRect(pos + 5, 10, {1, 0, 0, 0.3});
-    pdf.FillRect(pos - 10, {0, 1, 0, 0.3});
-    pdf.DrawLine(pos - 5, 2, {0, 0, 1, 0.3});
+    pdf.StrokeRect(pos, 3, {1, 0, 0, 0.3}, 25);
+    pdf.FillRect(pos - 3, {0, 1, 0, 0.3}, 22);
+    pdf.DrawLine(pos - 12.5, 2, {0, 0, 1, 0.3});
     pdf.DrawLine({pos.left(), pos.middle(), pos.width()}, 5, {0.5, 0.5, 0, 0});
     pdf.AddLink("http://www.pdfhummus.com", pos);
 
@@ -41,9 +41,9 @@ int main(int argc, char *argv[]) {
     sc::pdf pdf{"../output.pdf"};
     sc::rect pos{100, 100, 100, 100};
     draw_content_on_pdf_page(pdf, pos);
-    // pdf.NewPage();
-    // pos = sc::rect{25, 25, 50, 50};
-    // draw_content_on_pdf_page(pdf, pos);
+    pdf.NewPage();
+    pos = sc::rect{25, 25, 50, 50};
+    draw_content_on_pdf_page(pdf, pos);
 
     return 0;
 }

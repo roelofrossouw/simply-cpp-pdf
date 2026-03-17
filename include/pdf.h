@@ -35,9 +35,9 @@ namespace sc {
 
         auto DrawLine(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1}) -> void;
 
-        void StrokeRect(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1});
+        void StrokeRect(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1}, double radius = 0);
 
-        void FillRect(const rect &pos, const color &col = {0, 0, 0, 1});
+        void FillRect(const rect &pos, const color &col = {0, 0, 0, 1}, double radius = 0);
 
         void DrawObject();
 
@@ -63,6 +63,9 @@ namespace sc {
 
     private:
         hummus_impl *impl{};
+
+        void DrawRect(const rect &pos, double width, const color &col, double radius, bool filled);
+
     };
 }
 

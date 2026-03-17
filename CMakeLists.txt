@@ -26,6 +26,10 @@ set(USE_BUNDLED FALSE)
 set(USE_UNBUNDLED_FALLBACK_BUNDLED TRUE)
 add_subdirectory(third_party/pdf-writer pdf-writer EXCLUDE_FROM_ALL)
 
+#if(NOT TARGET sc)
+#    add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
+#endif()
+
 project(sc-pdf)
 add_library(${PROJECT_NAME} SHARED
         src/pdf.cpp
