@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.1)
 project(pdf)
 
 set(CMAKE_CXX_STANDARD 20)
-
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 
@@ -26,6 +26,10 @@ set(USE_BUNDLED FALSE)
 set(USE_UNBUNDLED_FALLBACK_BUNDLED TRUE)
 add_subdirectory(third_party/pdf-writer pdf-writer EXCLUDE_FROM_ALL)
 
+# git remote add sc https://github.com/roelofrossouw/simply-cpp.git
+# git stash; git subtree add --prefix=third_party/sc sc main --squash; git stash pop
+add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
+
 #if(NOT TARGET sc)
 #    add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
 #endif()
@@ -42,8 +46,8 @@ add_library(${PROJECT_NAME} SHARED
         include/pdf_rect.h
         include/font_spec.h
         include/font_collection.h)
-target_link_libraries(${PROJECT_NAME} PRIVATE PDFHummus::PDFWriter fontconfig)
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(${PROJECT_NAME} PUBLIC sc-shared PDFHummus::PDFWriter fontconfig)
 
 project(test_pdf)
 add_executable(${PROJECT_NAME} test/pdf.cpp)

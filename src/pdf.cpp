@@ -2,10 +2,12 @@
 #include <font_collection.h>
 #include <pdf_rect.h>
 #include <iostream>
+#include "../third_party/sc/sc.h"
+#include "InputStringStream.h"
 
-
-typedef size_t rsize_t;
-
+#if __cplusplus >= 202002L
+typedef ssize_t rsize_t;
+#endif
 #include "PDFWriter.h"
 #include "PDFPage.h"
 #include "PageContentContext.h"
@@ -13,7 +15,6 @@ typedef size_t rsize_t;
 #include "PDFUsedFont.h"
 #include "ResourcesDictionary.h"
 #include "XObjectContentContext.h"
-
 
 using namespace std;
 
@@ -126,9 +127,12 @@ namespace sc {
     }
 
     bool pdf::DrawImage(const std::string &filename) {
+
         // Create an image object from image
-        PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromJPGFile(filename);
-        // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromPNGStream();
+        // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromPNGFile(filename);
+        // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromJPGFile(filename);
+        InputStringStream strm{file_get_contents(filename)};
+        PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromPNGStream(&strm);
         if (!image) return false;
 
         impl->pageContentContext->q();
