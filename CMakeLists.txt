@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 4.1)
-project(pdf)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wno-psabi)
+endif()
 
 find_package(PkgConfig REQUIRED)
 
@@ -17,7 +18,6 @@ link_directories(${FREETYPE2_LIBRARY_DIRS})
 pkg_check_modules(LIBJPEG REQUIRED libjpeg)
 include_directories(${LIBJPEG_INCLUDE_DIRS})
 link_directories(${LIBJPEG_LIBRARY_DIRS})
-
 
 # git remote add pdf-writer https://github.com/galkahana/PDF-Writer.git
 # git stash; git subtree add --prefix=third_party/pdf-writer pdf-writer main --squash; git stash pop
