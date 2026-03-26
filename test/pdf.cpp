@@ -2,9 +2,11 @@
 #include "../third_party/sc/sc.h"
 
 void draw_content_on_pdf_page(sc::pdf &pdf, sc::rect &pos) {
-    pdf.DrawImage("../test/resource/image.png");
-    return;
 
+    pdf.FillRect({10, 10, 100, 100}, {0, 1, 0, 0.3});
+    pdf.DrawObject();
+
+    return;
     pdf.StrokeRect(pos, 3, {1, 0, 0, 0.3}, 25);
     pdf.FillRect(pos - 3, {0, 1, 0, 0.3}, 22);
     pdf.DrawLine(pos - 12.5, 2, {0, 0, 1, 0.3});
@@ -46,9 +48,9 @@ int main(int argc, char *argv[]) {
     auto *pdf = new sc::pdf{"../output.pdf"};
     sc::rect pos{100, 100, 100, 100};
     draw_content_on_pdf_page(*pdf, pos);
-    pdf->NewPage();
-    pos = sc::rect{25, 25, 50, 50};
-    draw_content_on_pdf_page(*pdf, pos);
+    // pdf->NewPage();
+    // pos = sc::rect{25, 25, 50, 50};
+    // draw_content_on_pdf_page(*pdf, pos);
     delete pdf;
     std::cout << "Done in " << t << std::endl;
 

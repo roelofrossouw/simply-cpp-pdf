@@ -1,8 +1,8 @@
 #ifndef SC_PDF_RECT_H
 #define SC_PDF_RECT_H
 
-#include "base_types.h"
 #include "PDFRectangle.h"
+#include "include/rect.h"
 
 namespace sc {
     class pdf_rect : public PDFRectangle {
