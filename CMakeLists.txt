@@ -48,12 +48,26 @@ set_target_properties(${PROJECT_NAME} PROPERTIES EXCLUDE_FROM_ALL ON)
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/include")
 
 
+project(sc-color)
+add_library(${PROJECT_NAME} STATIC src/color.cpp include/color.h)
+set_target_properties(${PROJECT_NAME} PROPERTIES EXCLUDE_FROM_ALL ON)
+target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/include")
+
+
+project(sc-rect)
+add_library(${PROJECT_NAME} STATIC src/rect.cpp include/rect.h)
+set_target_properties(${PROJECT_NAME} PROPERTIES EXCLUDE_FROM_ALL ON)
+target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/include")
+
+
 set(SOURCE_OBJECTS
         src/sc.cpp sc.h
         $<TARGET_OBJECTS:sc-base64>
         $<TARGET_OBJECTS:sc-svg2png>
         $<TARGET_OBJECTS:sc-rest>
         $<TARGET_OBJECTS:sc-timer>
+        $<TARGET_OBJECTS:sc-color>
+        $<TARGET_OBJECTS:sc-rect>
 )
 
 set(USED_LIBRARIES
@@ -91,5 +105,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE sc)
 
 project(test_timer)
 add_executable(${PROJECT_NAME} test/timer.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sc)
+
+project(test_color)
+add_executable(${PROJECT_NAME} test/color.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sc)
+
+project(test_rect)
+add_executable(${PROJECT_NAME} test/rect.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sc)
 
