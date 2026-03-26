@@ -1,0 +1,301 @@
+#ifndef SC_SVG_ELEMENT_H
+#define SC_SVG_ELEMENT_H
+#include <map>
+#include <vector>
+#include <ostream>
+#include "include/color.h"
+#include "include/rect.h"
+
+#if __cplusplus >= 202002L
+typedef ssize_t rsize_t;
+#endif
+#include "XObjectContentContext.h"
+
+namespace sc {
+    struct svg_point {
+        double x, y;
+
+        svg_point(const double x = 0, const double y = 0) : x(x), y(y) {
+        }
+
+        friend std::ostream &operator<<(std::ostream &lhs, const svg_point &rhs);
+
+        svg_point &operator+=(const svg_point &add);
+
+        svg_point operator+(const svg_point &add) const;
+
+        svg_point operator-(const svg_point &sub) const;
+    };
+
+    class svg_element {
+    public:
+        explicit svg_element(bool relative = false);
+
+        virtual ~svg_element();
+
+        svg_element *add_child(svg_element *child, bool is_svg);
+
+        virtual svg_element *add_child(svg_element *child, const std::map<std::string, std::string> &attributes, bool is_svg);
+
+        svg_element *add_child(svg_element *child, const std::vector<double> &values);
+
+        std::string path();
+
+        [[nodiscard]] virtual std::string string() const;
+
+        friend std::ostream &operator<<(std::ostream &lhs, const svg_element &rhs);
+
+        svg_point get_point(int i) const;
+
+        void set_point(int i, double x, double y, bool rel = false);
+
+        void set_point(int i, svg_point pt, bool rel = false);
+
+        virtual void draw(XObjectContentContext *ctx) const;
+
+        void virtual scale(double scale_x, double scale_y);
+
+        [[nodiscard]] virtual double width() const;
+
+        [[nodiscard]] virtual double height() const;
+
+        [[nodiscard]] rect virtual get_viewBox() const;
+
+        void resize(int new_width, int new_height, bool keep_aspect);
+
+        /**
+        Translate viewport to start at 0,0
+         */
+        void normalize();
+
+        void normalize(svg_point mv);
+
+        static svg_element *generator(svg_element *parent, const std::string &name, const std::map<std::string, std::string>& attributes = {});
+
+        void set_fill(const std::string &color_spec);
+
+        void set_stroke(const std::string &color_spec);
+
+        void set_stroke_width(double new_width = 1);
+
+        [[nodiscard]] svg_point get_start() const;
+
+        [[nodiscard]] svg_point get_end() const;
+
+        void set_start(double x, double y);
+
+        void set_start_x(double x);
+
+        void set_start_y(double y);
+
+        void set_start(const svg_point &pt);
+
+        void set_end(double x, double y);
+
+        void set_end(const svg_point &pt);
+
+        void set_relative_end(double x, double y);
+
+        void set_relative_end(svg_point &endpoint);
+
+    protected:
+        bool relative;
+        color fill = color::Black;
+        color stroke_color = color::Transparent;
+        double stroke_width = 1;
+        std::string id;
+        std::vector<svg_point> points; // Start = 0, End = 1, extra data after that.
+        std::vector<svg_element *> children;
+        svg_element *parent = nullptr, *previous = nullptr, *root = nullptr, *svg = nullptr;
+
+        virtual void add_attributes(const std::map<std::string, std::string> &attributes);
+
+        virtual void add_attributes(const std::vector<double> &attributes);
+
+        virtual void add_attribute(const std::string &name, const std::string &value);
+
+        [[nodiscard]] virtual std::string type() const;
+    };
+
+    class svg_xml : public svg_element {
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string type() const override;
+    public:
+        svg_xml();
+    };
+
+    class svg_header : public svg_element {
+    public:
+        void set_width(double w);
+
+        void set_height(double h);
+
+        void set_viewBox(const std::vector<double> &values);
+
+        void set_viewBox(double x, double y, double w, double h);
+
+    private:
+        rect viewBox{};
+
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        [[nodiscard]] std::string string() const override;
+
+        [[nodiscard]] double width() const override;
+
+        [[nodiscard]] double height() const override;
+
+        [[nodiscard]] rect get_viewBox() const override;
+    };
+
+    class svg_group : public svg_element {
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        std::string string() const override;
+    };
+
+    class svg_path : public svg_element {
+        void draw(XObjectContentContext *ctx) const override;
+
+        void add_command(char type, const std::vector<double> &values);
+
+        void parse_path(const std::string &value);
+
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        std::string string() const override;
+    };
+
+    class svg_clip_path : public svg_path {
+        void draw(XObjectContentContext *ctx) const override;
+
+        [[nodiscard]] std::string type() const override;
+    };
+
+
+    class svg_move : public svg_element {
+        void draw(XObjectContentContext *ctx) const override;
+
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
+
+    public:
+        explicit svg_move(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_line : public svg_element {
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+    public:
+        explicit svg_line(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_horizontal_line : public svg_line {
+        void add_attributes(const std::vector<double> &values) override;
+
+    public:
+        explicit svg_horizontal_line(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_vertical_line : public svg_line {
+        void add_attributes(const std::vector<double> &values) override;
+
+    public:
+        explicit svg_vertical_line(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_arc : public svg_element {
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        std::string string() const override;
+
+        svg_point radius;
+        double x_axis_rotation = 0;
+        bool large_arc_flag = false, sweep_flag = false;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+        void scale(double scale_x, double scale_y) override;
+
+    public:
+        explicit svg_arc(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_close : public svg_element {
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        void draw(XObjectContentContext *ctx) const override;
+    };
+
+    class svg_cubic_bezier : public svg_element {
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+    public:
+        explicit svg_cubic_bezier(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_quadratic_curve : public svg_element {
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+    public:
+        explicit svg_quadratic_curve(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_smooth_cubic_bezier : public svg_cubic_bezier {
+        void add_attributes(const std::vector<double> &values) override;
+
+    public:
+        explicit svg_smooth_cubic_bezier(bool is_relative = false) { relative = is_relative; }
+    };
+
+    class svg_rect : public svg_element {
+        void add_attributes(const std::map<std::string, std::string> &attributes) override;
+
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string string() const override;
+
+        [[nodiscard]] std::string type() const override;
+
+        void scale(double scale_x, double scale_y) override;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+        double radius_x{0}, radius_y{0};
+        double width{0}, height{0};
+    };
+
+    class use : public svg_element {
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string type() const override;
+
+        [[nodiscard]] std::string string() const;
+    };
+} // sc
+
+#endif //SC_SVG_ELEMENT_H

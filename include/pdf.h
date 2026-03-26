@@ -1,7 +1,8 @@
 #ifndef SC_PDF_H
 #define SC_PDF_H
-#include "base_types.h"
 #include "font_spec.h"
+#include "include/rect.h"
+#include "include/color.h"
 
 
 namespace sc {
@@ -60,6 +61,8 @@ namespace sc {
         void SetPage(unsigned int page_number);
 
         unsigned int PageCount() const;
+
+        void Go();
 
     private:
         hummus_impl *impl{};

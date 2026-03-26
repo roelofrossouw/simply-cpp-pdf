@@ -2,12 +2,11 @@
 #include <font_collection.h>
 #include <pdf_rect.h>
 #include <iostream>
-#include "../third_party/sc/sc.h"
+#include "sc.h"
 #include "InputStringStream.h"
+#include "svg2pdf.h"
+#include "include/color.h"
 
-#if __cplusplus >= 202002L
-typedef ssize_t rsize_t;
-#endif
 #include "PDFWriter.h"
 #include "PDFPage.h"
 #include "PageContentContext.h"
@@ -127,7 +126,6 @@ namespace sc {
     }
 
     bool pdf::DrawImage(const std::string &filename) {
-
         // Create an image object from image
         // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromPNGFile(filename);
         // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromJPGFile(filename);
@@ -156,7 +154,7 @@ namespace sc {
     bool pdf::DrawText(const string &text, const rect &pos, const double &fontsize, const font_spec &font, const color &col) {
         const pdf_rect position{pos, impl->height};
         impl->pageContentContext->BT();
-        impl->pageContentContext->k(col.c, col.m, col.y, col.k);
+        impl->pageContentContext->k(col.cyan(), col.magenta(), col.yellow(), col.black());
         impl->pageContentContext->Tf(impl->get_font(font), fontsize);
         impl->pageContentContext->Td(position.left(), position.bottom());
         impl->pageContentContext->Tj(text);
@@ -168,7 +166,7 @@ namespace sc {
         const pdf_rect rect{pos, impl->height};
         impl->pageContentContext->q();
         impl->pageContentContext->w(width);
-        impl->pageContentContext->K(col.c, col.m, col.y, col.k);
+        impl->pageContentContext->K(col.cyan(), col.magenta(), col.yellow(), col.black());
         impl->pageContentContext->m(rect.left(), rect.bottom());
         impl->pageContentContext->l(rect.right(), rect.top());
         impl->pageContentContext->s();
@@ -179,8 +177,8 @@ namespace sc {
         const pdf_rect rect{pos, impl->height};
         impl->pageContentContext->q();
         if (width > 0) impl->pageContentContext->w(width);
-        if (filled) impl->pageContentContext->k(col.c, col.m, col.y, col.k);
-        else impl->pageContentContext->K(col.c, col.m, col.y, col.k);
+        if (filled) impl->pageContentContext->k(col.cyan(), col.magenta(), col.yellow(), col.black());
+        else impl->pageContentContext->K(col.cyan(), col.magenta(), col.yellow(), col.black());
         if (radius > 0) {
             radius = min(radius, min(rect.width() / 2, rect.height() / 2));
             double control = radius * 0.448216; // Control points needed on cubic bezier curve to form a quarter circle.
@@ -215,14 +213,52 @@ namespace sc {
         impl->pdfWriter->PausePageContentContext(impl->pageContentContext);
 
         // Create a form with a triangle pattern, RGB colorspace, fill
-        PDFFormXObject *formXObject = impl->pdfWriter->StartFormXObject(PDFRectangle(0, 0, 400, 400));
-        XObjectContentContext *xobjectContent = formXObject->GetContentContext();
+        PDFFormXObject *formXObject = impl->pdfWriter->StartFormXObject(PDFRectangle(0, 0, 100, 100));
+        XObjectContentContext *xobjectContentContext = formXObject->GetContentContext();
 
-        xobjectContent->rg(1, 0, 0);
-        xobjectContent->m(0, 0);
-        xobjectContent->l(200, 400);
-        xobjectContent->l(400, 0);
-        xobjectContent->f();
+        std::string glyph;
+        // Arcs:
+        // glyph = "file-earmark-pdf-bs";
+        // glyph = "flag_hk";
+        // glyph = "square-empty";
+        glyph = "calendar-day-bs";
+        // glyph = "flag_za";
+        // glyph = "camping-benches";
+        // glyph = "1web";
+
+        auto svg_data = rest::fetch("https://roelof.1web.co.za/images/glyph.svg?g=" + glyph);
+
+        // svg_data = std::string("<svg viewBox='0 0 900 600' >") +
+        //            std::string("<rect width=\"900\" height=\"600\" fill=\"#de2910\"/>") +
+        //            std::string("<g id=\"petal\">") +
+        //            std::string("<path d=\"m 449.96406,299.9134 c -105.26305,-44.48626 -58.60174,-181.58185 42.06956,-174.6907") +
+        //            std::string(" -20.36609,10.46694 -23.31775,29.99772 -11.68704,48.09021 13.02444,20.2558 -1.19897,52.84856") +
+        //            std::string(" -18.80577,60.7674 -28.93485,13.02443 -34.72791,47.74999 -11.57675,65.83309 z\" fill=\"#fff\"/>") +
+        //            std::string("<path d=\"m 444.27188,200.91974 -5.91976,9.29378 -2.14454,-10.8142 -10.67812,-2.75928") +
+        //            std::string(" 9.62461,-5.3895 -0.67104,-10.99955 8.08542,7.48945 10.25578,-4.04271 -4.61053,10.00942") +
+        //            std::string(" 7.00143,8.50541 z\" fill=\"#de2910\"/>") +
+        //            std::string("<path d=\"m 450.56002,298.75902 c -12.73114,-6.53451 -22.9963,-20.15491 -27.46839,-36.43134") +
+        //            std::string(" -5.11498,-18.66969 -2.17269,-38.74247 8.08308,-55.03768 l -2.20789,-1.39371 c -10.64057,16.92871 -13.69313,37.74293") +
+        //            std::string(" -8.38575,57.11886 4.72784,17.22201 15.21355,31.09815 28.78703,38.06438 z\" fill=\"#de2910\"/>") +
+        //            std::string("</g>") +
+        //            // std::string("<use xlink:href=\"#petal\" transform=\"rotate(72 450,300)\"/>") +
+        //            // std::string("<use xlink:href=\"#petal\" transform=\"rotate(144 450,300)\"/>") +
+        //            // std::string("<use xlink:href=\"#petal\" transform=\"rotate(216 450,300)\"/>") +
+        //            // std::string("<use xlink:href=\"#petal\" transform=\"rotate(288 450,300)\"/>") +
+        //            // std::string("<path  d=\"\" />") +
+        //            std::string("</svg>");
+
+        svg2pdf p(svg_data);
+        p.resize(100, 100);
+        p.scale(1, -1);
+        p.move(0, 100);
+
+        // p.scale(1, -1);
+        // p.move(0, -75);
+        p.draw(xobjectContentContext);
+
+        //std::cout << p << std::endl;
+        std::cout << svg_data.substr(0, 11500) << std::endl;
 
         ObjectIDType formObjectID = formXObject->GetObjectID();
         auto status = impl->pdfWriter->EndFormXObjectAndRelease(formXObject);
@@ -230,14 +266,13 @@ namespace sc {
 
         // Place the form in multiple locations in the page
         string formNameInPage = impl->pdfPage->GetResourcesDictionary().AddFormXObjectMapping(formObjectID);
-
         impl->pageContentContext->q();
-        impl->pageContentContext->cm(0.5, 0, 0, 0.5, 120, 100);
+        impl->pageContentContext->cm(1, 0, 0, 1, 10, impl->page_height() - 10 - 100);
         impl->pageContentContext->Do(formNameInPage);
         impl->pageContentContext->Q();
 
         impl->pageContentContext->q();
-        impl->pageContentContext->cm(0.2, 0, 0, 0.2, 350, 100);
+        impl->pageContentContext->cm(2, 0, 0, 2, 160, impl->page_height() - 10 - 250);
         impl->pageContentContext->Do(formNameInPage);
         impl->pageContentContext->Q();
     }
@@ -302,5 +337,8 @@ namespace sc {
 
     unsigned int pdf::PageCount() const {
         return impl->pages.size();
+    }
+
+    void pdf::Go() {
     }
 }

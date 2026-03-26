@@ -30,24 +30,34 @@ add_subdirectory(third_party/pdf-writer pdf-writer EXCLUDE_FROM_ALL)
 # git stash; git subtree add --prefix=third_party/sc sc main --squash; git stash pop
 add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
 
+# git remote add tinyxml2 https://github.com/leethomason/tinyxml2.git
+# git stash; git subtree add --prefix=third_party/tinyxml2 tinyxml2 master --squash; git stash pop
+add_subdirectory(third_party/tinyxml2 EXCLUDE_FROM_ALL)
+
 #if(NOT TARGET sc)
 #    add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
 #endif()
+#
+#project(sc-svg-parser)
+#add_library(${PROJECT_NAME} STATIC  )
+#target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/include")
+#target_link_libraries(${PROJECT_NAME} PUBLIC sc )
+#
 
 project(sc-pdf)
 add_library(${PROJECT_NAME} SHARED
         src/pdf.cpp
-        src/base_types.cpp
         src/pdf_rect.cpp
         src/font_spec.cpp
         src/font_collection.cpp
+        src/svg_parser.cpp src/svg2pdf.cpp src/svg_element.cpp
         include/pdf.h
-        include/base_types.h
         include/pdf_rect.h
         include/font_spec.h
-        include/font_collection.h)
+        include/font_collection.h
+        include/svg_parser.h include/svg2pdf.h include/svg_element.h)
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(${PROJECT_NAME} PUBLIC sc-shared PDFHummus::PDFWriter fontconfig)
+target_link_libraries(${PROJECT_NAME} PUBLIC sc-shared tinyxml2::tinyxml2 PDFHummus::PDFWriter fontconfig)
 
 project(test_pdf)
 add_executable(${PROJECT_NAME} test/pdf.cpp)
