@@ -1,8 +1,10 @@
 #include "base64.h"
-#if __cplusplus >= 202002L
+#ifndef _RSIZE_T
+#define _RSIZE_T
 typedef ssize_t rsize_t;
-#endif
+#endif  /* _RSIZE_T */
 #include <base64.hpp>
+
 
 namespace sc {
     std::string base64::decode(const std::string &encoded) {
