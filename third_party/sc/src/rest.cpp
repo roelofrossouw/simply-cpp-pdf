@@ -85,11 +85,16 @@ namespace sc {
     std::string rest::fetch(const std::string &url, const std::string &base_url) {
         if (url.size() > 100) return "";
         if (fetch_cache.find(url) != fetch_cache.end()) {
+#ifndef NDEBUG
+            std::cout << "cache hit: " << url << std::endl;
+#endif
             return fetch_cache[url];
         }
 
         std::string content;
-
+#ifndef NDEBUG
+        sc::timer t;
+#endif
         if (std::filesystem::exists(url)) {
             content = file_get_contents(url);
         }
@@ -109,6 +114,10 @@ namespace sc {
             rest rest(url);
             content = rest.get();
         }
+
+#ifndef NDEBUG
+        std::cout << "Fetched: " << url << " in " << t << std::endl;
+#endif
 
         fetch_cache[url] = content;
         return fetch_cache[url];
