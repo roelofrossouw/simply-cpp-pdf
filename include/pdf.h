@@ -40,7 +40,7 @@ namespace sc {
 
         void FillRect(const rect &pos, const color &col = {0, 0, 0, 1}, double radius = 0);
 
-        void DrawObject();
+        void DrawObject(std::string svg_data, const rect &pos = {50, 50, 100, 100});
 
         void AddLink(const std::string &url, const rect &pos);
 
@@ -68,7 +68,6 @@ namespace sc {
         hummus_impl *impl{};
 
         void DrawRect(const rect &pos, double width, const color &col, double radius, bool filled);
-
     };
 }
 
