@@ -4,7 +4,7 @@ else ()
     cmake_minimum_required(VERSION 3.10)
 endif ()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(SC_VERSION 1.0.2)
@@ -80,14 +80,14 @@ set(USED_LIBRARIES
 project(sc VERSION ${SC_VERSION} DESCRIPTION "simply-cpp common static library")
 add_library(${PROJECT_NAME} STATIC ${SOURCE_OBJECTS})
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${USED_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${USED_LIBRARIES})
 
 # Combined shared libary for easy usage
 project(sc-shared VERSION ${SC_VERSION} DESCRIPTION "simply-cpp common shared library")
 add_library(${PROJECT_NAME} SHARED ${SOURCE_OBJECTS})
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${USED_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${USED_LIBRARIES})
 
 ## TESTS ##
 
