@@ -1,6 +1,6 @@
 #include "color.h"
 #include <algorithm>
-#include <iostream>
+#include <sstream>
 #include <regex>
 #include <unordered_map>
 
