@@ -23,16 +23,24 @@ namespace sc {
         impl->root->draw(ctx);
     }
 
-    void svg2pdf::resize(int new_width, int new_height, bool keep_aspect) {
+    void svg2pdf::resize(double new_width, double new_height, bool keep_aspect) {
         impl->root->resize(new_width, new_height, keep_aspect);
     }
 
-    void svg2pdf::scale(int x, int y) {
+    void svg2pdf::scale(double x, double y) {
         impl->root->scale(x, y);
     }
 
     void svg2pdf::move(double x, double y) {
         impl->root->normalize({x, y});
+    }
+
+    void svg2pdf::do_transform() {
+        impl->root->do_transform();
+    }
+
+    void svg2pdf::flip() {
+        impl->root->flip();
     }
 
     svg2pdf::svg2pdf(const std::string_view xml_data) : impl(new svg2pdf_impl) {

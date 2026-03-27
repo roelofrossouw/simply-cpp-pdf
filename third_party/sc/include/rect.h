@@ -4,7 +4,7 @@
 namespace sc {
     class rect {
     public:
-        rect(double left, double bottom, double width = 0, double height = 0);
+        rect(double left, double top, double width = 0, double height = 0);
 
         rect();
 
