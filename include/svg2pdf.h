@@ -18,11 +18,15 @@ namespace sc {
 
         void draw(XObjectContentContext * ctx) const;
 
-        void resize(int new_width, int new_height, bool keep_aspect = true);
+        void resize(double new_width, double new_height, bool keep_aspect = true);
 
-        void scale(int x, int y);
+        void scale(double x, double y);
 
         void move(double x, double y);
+
+        void do_transform();
+
+        void flip();
 
     private:
         svg2pdf_impl *impl;
