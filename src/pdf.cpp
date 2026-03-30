@@ -219,17 +219,8 @@ namespace sc {
 
         svg2pdf p(svg_data);
         p.resize(100, 100);
-         p.flip();
-
-        // Flip...
-        // p.move(0, 50);
-        // p.scale(1, -1);
-        // p.move(0, 50);
-        // p.scale(1, -1);
-        // p.move(0, 100);
-
+        p.flip();
         p.draw(xobjectContentContext);
-
 
         ObjectIDType formObjectID = formXObject->GetObjectID();
         auto status = impl->pdfWriter->EndFormXObjectAndRelease(formXObject);
@@ -237,7 +228,7 @@ namespace sc {
 
         // Place the image
         auto scale_x = pos.width() / 100.0;
-        auto scale_y =  pos.height() / 100.0;
+        auto scale_y = pos.height() / 100.0;
         string formNameInPage = impl->pdfPage->GetResourcesDictionary().AddFormXObjectMapping(formObjectID);
         impl->pageContentContext->q();
         impl->pageContentContext->cm(scale_x, 0, 0, scale_y, rect.left(), rect.top() - rect.height());
