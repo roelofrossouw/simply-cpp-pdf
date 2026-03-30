@@ -1,5 +1,6 @@
 #ifndef SC_SVG_ELEMENT_H
 #define SC_SVG_ELEMENT_H
+#include <istream>
 #include <map>
 #include <vector>
 #include "include/color.h"
@@ -211,6 +212,12 @@ namespace sc {
 
         void add_command(char type, const std::vector<double> &values);
 
+        static bool isdecimal(char character);
+
+        bool issign(char character);
+
+        double get_double(std::istringstream &ss);
+
         void parse_path(const std::string &value);
 
         void add_attribute(const std::string &name, const std::string &value) override;
@@ -244,61 +251,63 @@ namespace sc {
     };
 
     class svg_line : public svg_element {
+    public:
         void add_attributes(const std::vector<double> &values) override;
 
         [[nodiscard]] std::string type() const override;
 
         void draw(XObjectContentContext *ctx) const override;
 
-    public:
         explicit svg_line(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;
     };
 
     class svg_horizontal_line : public svg_line {
+    public:
         void add_attributes(const std::vector<double> &values) override;
 
-    public:
         explicit svg_horizontal_line(bool is_relative = false) { relative = is_relative; }
     };
 
     class svg_vertical_line : public svg_line {
+    public:
         void add_attributes(const std::vector<double> &values) override;
 
-    public:
         explicit svg_vertical_line(bool is_relative = false) { relative = is_relative; }
     };
 
     class svg_arc : public svg_element {
-        void add_attributes(const std::vector<double> &values) override;
-
-        [[nodiscard]] std::string type() const override;
-
-        std::string string() const override;
-
         svg_point radius;
         double x_axis_rotation = 0;
         bool large_arc_flag = false, sweep_flag = false;
+
+    protected:
+        void add_attributes(const std::vector<double> &values) override;
+
+    public:
+        [[nodiscard]] std::string type() const override;
+
+        std::string string() const override;
 
         void draw(XObjectContentContext *ctx) const override;
 
         void scale(double scale_x, double scale_y) override;
 
-    public:
         explicit svg_arc(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;
     };
 
     class svg_close : public svg_element {
+    protected:
         void add_attributes(const std::vector<double> &values) override;
 
         [[nodiscard]] std::string type() const override;
 
+    public:
         void draw(XObjectContentContext *ctx) const override;
 
-    public:
         [[nodiscard]] svg_element *clone() const override;
     };
 
@@ -307,9 +316,9 @@ namespace sc {
 
         [[nodiscard]] std::string type() const override;
 
+    public:
         void draw(XObjectContentContext *ctx) const override;
 
-    public:
         explicit svg_cubic_bezier(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;

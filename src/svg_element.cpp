@@ -321,11 +321,7 @@ namespace sc {
     }
 
     void svg_group::flip() {
-        std::cout << "Flipping group " << id << ", " << children[0]->get_svg() << "s " << type();
-        std::cout << " before " << children[0]->get_start();
         svg_element::flip();
-        std::cout << " after " << children[0]->get_start();
-        std::cout << std::endl;
     }
 
     svg_element *svg_group::clone() const {
@@ -333,6 +329,7 @@ namespace sc {
     }
 
     void svg_path::add_command(char type, const std::vector<double> &values) {
+        // std::cout << "Cmd " << type << ":" << std::endl;
         if (type == 'm' || type == 'M') add_child(new svg_move(islower(type)), values);
         else if (type == 'c' || type == 'C') add_child(new svg_cubic_bezier(islower(type)), values);
         else if (type == 'q' || type == 'Q') add_child(new svg_quadratic_curve(islower(type)), values);
@@ -345,20 +342,48 @@ namespace sc {
         else std::cout << "Unknown command: " << type << " " << values.size() << std::endl;
     }
 
+    bool svg_path::isdecimal(const char character) {
+        return character == '.';
+    }
+
+    bool svg_path::issign(const char character) {
+        return character == '+' || character == '-';
+    }
+
+    double svg_path::get_double(std::istringstream &ss) {
+        char next = ss.peek();
+        while (isspace(next) || next == ',') {
+            ss.get();
+            next = ss.peek();
+        }
+        std::string value;
+        bool gotdecimal = false;
+        bool gotsign = false;
+        next = ss.peek();
+        while (next != EOF && (isnumber(next) || issign(next) || isdecimal(next))) {
+            if (issign(next)) {
+                if (gotsign) break;
+            }
+            if (isdecimal(next)) {
+                if (gotdecimal) break;
+                gotdecimal = true;
+            }
+            gotsign = true;
+            value += static_cast<char>(ss.get());
+            next = ss.peek();
+        }
+        // std::cout << "Parsing " << value << std::endl;
+        if (value.empty()) return 0;
+        return std::stod(value);
+    }
+
     void svg_path::parse_path(const std::string &value) {
         std::istringstream ss(value);
+        ss.imbue(std::locale::classic());
         char c;
         while (ss >> c) {
             std::vector<double> args;
-            double val;
-            while (ss.peek() != EOF && !(isalpha(ss.peek()))) {
-                if (ss.peek() == ' ' || ss.peek() == ',' || ss.peek() == '\n' || ss.peek() == '\r' || ss.peek() == '\t') {
-                    ss.get();
-                    continue;
-                }
-                ss >> val;
-                args.push_back(val);
-            }
+            while (ss.peek() != EOF && !(isalpha(ss.peek()))) args.push_back(get_double(ss));
             add_command(c, args);
         }
     }
@@ -694,8 +719,12 @@ namespace sc {
     }
 
     void svg_element::draw(XObjectContentContext *ctx) const {
+        std::cout << "svg_element::draw(): " << type() << std::endl;
         if (fill != color{0, 0, 0, 0}) ctx->rg(fill.red(), fill.green(), fill.blue());
-        for (auto const &child: children) { child->draw(ctx); }
+        for (auto const &child: children) {
+            // std::cout << "child draw(" << child->string() << ")" << std::endl;
+            child->draw(ctx);
+        }
     }
 
     void svg_element::scale(double scale_x, double scale_y) {
@@ -821,8 +850,8 @@ namespace sc {
             ctx->f();
         }
         if (stroke_color.alpha() != 0) {
-            ctx->RG(0, 0, 1); // stroke_color.red(), stroke_color.green(), stroke_color.blue());
-            ctx->w(0.1); // stroke_width);
+            ctx->RG(stroke_color.red(), stroke_color.green(), stroke_color.blue());
+            ctx->w(stroke_width);
             for (auto const &child: children) { child->draw(ctx); }
             ctx->s();
         }
