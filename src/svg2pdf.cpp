@@ -43,6 +43,14 @@ namespace sc {
         impl->root->flip();
     }
 
+    double svg2pdf::height() const {
+        return impl->root->height();
+    }
+
+    double svg2pdf::width() const {
+        return impl->root->width();
+    }
+
     svg2pdf::svg2pdf(const std::string_view xml_data) : impl(new svg2pdf_impl) {
         svg_parser p(xml_data);
         p.process(this);

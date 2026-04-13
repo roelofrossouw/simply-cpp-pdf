@@ -34,19 +34,31 @@ namespace sc {
     }
 
     color color::from_hex(const std::string &hex) {
-        double r = 0, g = 0, b = 0;
-        if (hex.size() == 7) {
+        double r = 0, g = 0, b = 0, a = 1;
+        if (hex.size() == 9) {
+            // #RRGGBBAA
+            r = std::stoi(hex.substr(1, 2), nullptr, 16) / 255.0;
+            g = std::stoi(hex.substr(3, 2), nullptr, 16) / 255.0;
+            b = std::stoi(hex.substr(5, 2), nullptr, 16) / 255.0;
+            a = 1 - std::stoi(hex.substr(7, 2), nullptr, 16) / 255.0;
+        } else if (hex.size() == 7) {
             // #RRGGBB
             r = std::stoi(hex.substr(1, 2), nullptr, 16) / 255.0;
             g = std::stoi(hex.substr(3, 2), nullptr, 16) / 255.0;
             b = std::stoi(hex.substr(5, 2), nullptr, 16) / 255.0;
+        } else if (hex.size() == 5) {
+            // #RGBA shorthand
+            r = std::stoi(std::string(2, hex[1]), nullptr, 16) / 255.0;
+            g = std::stoi(std::string(2, hex[2]), nullptr, 16) / 255.0;
+            b = std::stoi(std::string(2, hex[3]), nullptr, 16) / 255.0;
+            a = 1 - std::stoi(std::string(2, hex[4]), nullptr, 16) / 255.0;
         } else if (hex.size() == 4) {
             // #RGB shorthand
             r = std::stoi(std::string(2, hex[1]), nullptr, 16) / 255.0;
             g = std::stoi(std::string(2, hex[2]), nullptr, 16) / 255.0;
             b = std::stoi(std::string(2, hex[3]), nullptr, 16) / 255.0;
         }
-        return {r, g, b, 1};
+        return {r, g, b, a};
     }
 
     color color::from_hsl(double h, double s, double l, double a) {

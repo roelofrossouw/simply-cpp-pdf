@@ -1,6 +1,7 @@
 #include "svg_element.h"
 #include <iostream>
 #include <math.h>
+#include <ranges>
 #include <sstream>
 
 namespace sc {
@@ -37,6 +38,18 @@ namespace sc {
         return *this;
     }
 
+    svg_point &svg_point::operator-=(const svg_point &sub) {
+        x -= sub.x;
+        y -= sub.y;
+        return *this;
+    }
+
+    svg_point &svg_point::operator*=(const double factor) {
+        x *= factor;
+        y *= factor;
+        return *this;
+    }
+
     svg_point svg_point::operator+(const svg_point &add) const {
         return svg_point{x + add.x, y + add.y};
     }
@@ -54,6 +67,14 @@ namespace sc {
         y = sin_a * (norm.x) + cos_a * (norm.y) + center.y;
     }
 
+    svg_point svg_point::operator*(double i) const {
+        return svg_point{x * i, y * i};
+    }
+
+    bool svg_point::operator==(const svg_point &svg_point) const {
+        return x == svg_point.x && y == svg_point.y;
+    }
+
     svg_point operator*(double lhs, const svg_point &rhs) {
         return svg_point{lhs * rhs.x, lhs * rhs.y};
     }
@@ -65,10 +86,12 @@ namespace sc {
     svg_element::svg_element(const svg_element &other) {
         relative = other.relative;
         fill = other.fill;
+        fill_rule = other.fill_rule;
         stroke_color = other.stroke_color;
         stroke_width = other.stroke_width;
         svg = other.svg;
         root = other.root;
+        transform = other.transform;
         for (auto p: other.points) points.push_back(p);
         for (auto c: other.children) add_child(c->clone(), false);
     }
@@ -84,7 +107,25 @@ namespace sc {
         }
     }
 
+    color svg_element::get_fill() const {
+        return fill;
+    }
+
+    color svg_element::get_stroke() const {
+        return stroke_color;
+    }
+
+    double svg_element::get_stroke_width() const {
+        return stroke_width;
+    }
+
     svg_element *svg_element::add_child(svg_element *child, bool is_svg) {
+        if (!child) return nullptr;
+        if (type() == "Group") {
+            if (fill != color::Black && child->get_fill() == color::Black) child->set_fill(fill);
+            if (stroke_color != color::Transparent && child->get_stroke() == color::Transparent) child->set_stroke(stroke_color);
+            if (stroke_width != 1 && child->get_stroke_width() == 1) child->set_stroke_width(stroke_width);
+        }
         auto last_child = children.empty() ? nullptr : children.back();
         children.push_back(child);
         child->parent = this;
@@ -134,9 +175,12 @@ namespace sc {
     svg_element *svg_element::generator(svg_element *parent, const std::string &name, const std::map<std::string, std::string> &attributes) {
         if (name == "svg") return parent->add_child(new svg_header(), attributes, true);
         if (name == "path") return parent->add_child(new svg_path(), attributes);
-        if (name == "clipPath") return parent->add_child(new svg_path(), attributes);
+        if (name == "clipPath") return parent->add_child(new svg_clip_path(), attributes);
         if (name == "rect") return parent->add_child(new svg_rect(), attributes);
+        if (name == "circle") return parent->add_child(new svg_circle(), attributes);
+        if (name == "polygon") return parent->add_child(new svg_polygon(), attributes);
         if (name == "use") return parent->add_child(new svg_use(), attributes);
+        if (name == "defs") return parent->add_child(new svg_defs(), attributes);
         if (name == "g") {
             auto group = parent->add_child(new svg_group(), attributes);
             for (auto &child: group->children) {
@@ -152,6 +196,10 @@ namespace sc {
         fill = color::from_string(color_spec);
     }
 
+    void svg_element::set_fill(const color &color_spec) {
+        fill = color_spec;
+    }
+
     svg_point svg_element::get_start() const { return get_point(0); }
     svg_point svg_element::get_end() const { return get_point(1); }
     void svg_element::set_start(const double x, const double y) { set_start(svg_point{x, y}); }
@@ -159,10 +207,7 @@ namespace sc {
     void svg_element::set_start_y(const double y) { set_point(0, svg_point{get_point(0).x, y}); }
     void svg_element::set_start(const svg_point &pt) { set_point(0, pt); }
     void svg_element::set_end(const double x, const double y) { set_end(svg_point{x, y}); }
-
-    void svg_element::set_end(const svg_point &pt) {
-        set_point(1, pt);
-    }
+    void svg_element::set_end(const svg_point &pt) { set_point(1, pt); }
 
     void svg_element::set_relative_end(double x, double y) {
         svg_point endpoint{x, y};
@@ -203,18 +248,17 @@ namespace sc {
     }
 
     void svg_element::parse_transform(const std::string &transform) {
-        // std::cout << "Transform " << type() << ": " << transform << std::endl;
         std::stringstream ss(transform);
         std::string token;
+        std::vector<std::pair<std::string, std::vector<double> > > transforms;
         while (std::getline(ss, token, ')')) {
             if (token.empty()) continue;
             auto pos = token.find('(');
             if (pos == std::string::npos) continue;
+            transforms.insert(transforms.begin(), {token.substr(0, pos), parse_transform_params(token.substr(pos + 1))});
+        }
 
-            std::string name = token.substr(0, pos);
-            std::string args = token.substr(pos + 1);
-            auto params = parse_transform_params(args);
-
+        for (const auto &[name, params]: transforms) {
             if (name.find("translate") != std::string::npos) {
                 double tx = params.size() > 0 ? params[0] : 0;
                 double ty = params.size() > 1 ? params[1] : 0;
@@ -235,6 +279,23 @@ namespace sc {
                 //     matrix(params[0], params[1], params[2], params[3], params[4], params[5]);
             }
         }
+    }
+
+    void svg_element::set_fill_type(XObjectContentContext *ctx) const {
+        ctx->rg(fill.red(), fill.green(), fill.blue());
+    }
+
+    void svg_element::do_fill(XObjectContentContext *ctx) const {
+        if (fill_rule == 1) ctx->fStar();
+        else ctx->f();
+    }
+
+    void svg_element::set_stroke_type(XObjectContentContext *ctx) const {
+        ctx->RG(stroke_color.red(), stroke_color.green(), stroke_color.blue());
+        if (stroke_join != 0) ctx->j(stroke_join);
+        if (stroke_cap != 0) ctx->J(stroke_cap);
+        if (stroke_miter_limit != 10) ctx->M(stroke_miter_limit);
+        ctx->w(stroke_width);
     }
 
     void svg_xml::add_attribute(const std::string &name, const std::string &value) {
@@ -267,14 +328,11 @@ namespace sc {
 
     void svg_header::set_viewBox(const double x, const double y, const double w, const double h) {
         viewBox = rect(x, y, w, h);
-        //set_width(viewBox.width());
-        // set_height(viewBox.height());
-        // if (width == 0) set_width(viewBox.width());
-        // if (height == 0) set_height( viewBox.height());
     }
 
     void svg_header::add_named_element(svg_element *element) {
-        named_elements[element->get_id()] = element;
+        named_elements["#" + element->get_id()] = element;
+        named_elements["url(#" + element->get_id() + ")"] = element;
     }
 
     svg_element *svg_header::get_named_element(const std::string &name) {
@@ -291,7 +349,7 @@ namespace sc {
         if (name == "width") set_width(string_split_to_double(value)[0]);
         else if (name == "height") set_height(string_split_to_double(value)[0]);
         else if (name == "viewBox") set_viewBox(string_split_to_double(value));
-        else std::cout << "Unknown header attribute: " << name << " = " << value << std::endl;
+        else std::cerr << "Unknown header attribute: " << name << " = " << value << std::endl;
     }
 
 
@@ -307,7 +365,7 @@ namespace sc {
 
     void svg_group::add_attribute(const std::string &name, const std::string &value) {
         if (add_common_attribute(name, value)) return;
-        else std::cout << "Unknown group attribute: " << name << " = " << value << std::endl;
+        else std::cerr << "Unknown group attribute: " << name << " = " << value << std::endl;
     }
 
     std::string svg_group::type() const {
@@ -329,7 +387,6 @@ namespace sc {
     }
 
     void svg_path::add_command(char type, const std::vector<double> &values) {
-        // std::cout << "Cmd " << type << ":" << std::endl;
         if (type == 'm' || type == 'M') add_child(new svg_move(islower(type)), values);
         else if (type == 'c' || type == 'C') add_child(new svg_cubic_bezier(islower(type)), values);
         else if (type == 'q' || type == 'Q') add_child(new svg_quadratic_curve(islower(type)), values);
@@ -339,7 +396,7 @@ namespace sc {
         else if (type == 'v' || type == 'V') add_child(new svg_vertical_line(islower(type)), values);
         else if (type == 'a' || type == 'A') add_child(new svg_arc(islower(type)), values);
         else if (type == 'z' || type == 'Z') add_child(new svg_close(), values);
-        else std::cout << "Unknown command: " << type << " " << values.size() << std::endl;
+        else std::cerr << "Unknown command: " << type << " " << values.size() << std::endl;
     }
 
     bool svg_path::isdecimal(const char character) {
@@ -372,7 +429,6 @@ namespace sc {
             value += static_cast<char>(ss.get());
             next = ss.peek();
         }
-        // std::cout << "Parsing " << value << std::endl;
         if (value.empty()) return 0;
         return std::stod(value);
     }
@@ -392,6 +448,10 @@ namespace sc {
         stroke_color = color::from_string(color_spec);
     }
 
+    void svg_element::set_stroke(const color &color_spec) {
+        stroke_color = color_spec;
+    }
+
     void svg_element::set_stroke_width(double new_width) {
         stroke_width = new_width;
     }
@@ -403,7 +463,7 @@ namespace sc {
         else if (name == "stroke-width") set_stroke_width(std::stod(value));
         else if (name == "d") parse_path(value);
         else if (name == "id") id = value;
-        else std::cout << "Unknown path attribute: " << name << " = " << value << std::endl;
+        else std::cerr << "Unknown path attribute: " << name << " = " << value << std::endl;
     }
 
     std::string svg_path::type() const {
@@ -431,8 +491,8 @@ namespace sc {
         return new svg_path(*this);
     }
 
-    void svg_clip_path::draw(XObjectContentContext *ctx) const {
-        return;
+    void svg_path::stroke(XObjectContentContext *ctx) const {
+        svg_element::stroke(ctx);
     }
 
     void svg_move::add_attributes(const std::vector<double> &values) {
@@ -504,7 +564,15 @@ namespace sc {
         return ss.str();
     }
 
-    void svg_arc::draw(XObjectContentContext *ctx) const {
+    double svg_arc::angleBetween(double ux, double uy, double vx, double vy) {
+        double dot = ux * vx + uy * vy;
+        double len = std::sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+        double ang = std::acos(std::max(-1.0, std::min(1.0, dot / len)));
+        if (ux * vy - uy * vx < 0) ang = -ang;
+        return ang;
+    };
+
+    void svg_arc::stroke(XObjectContentContext *ctx) const {
         // ctx->l(get_end().x, get_end().y);
 
         auto x1 = get_start().x;
@@ -552,15 +620,6 @@ namespace sc {
         double cx = cosPhi * cxp - sinPhi * cyp + (x1 + x2) / 2.0;
         double cy = sinPhi * cxp + cosPhi * cyp + (y1 + y2) / 2.0;
 
-        // Step 3: Compute angles
-        auto angleBetween = [](double ux, double uy, double vx, double vy) {
-            double dot = ux * vx + uy * vy;
-            double len = std::sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
-            double ang = std::acos(std::max(-1.0, std::min(1.0, dot / len)));
-            if (ux * vy - uy * vx < 0) ang = -ang;
-            return ang;
-        };
-
         double theta1 = angleBetween(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
         double deltaTheta = angleBetween((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
 
@@ -590,7 +649,7 @@ namespace sc {
 
             // Derivatives
             double alpha = std::tan(delta / 4.0);
-            double factor = (4.0 / 3.0) * alpha / (1 + alpha * alpha);
+            double factor = (8.0 / 5) * alpha / (1 + alpha * alpha);
 
             std::pair<double, double> P1 = {
                 P0.first - factor * (rx * cosPhi * sinT1 + ry * sinPhi * cosT1),
@@ -644,7 +703,7 @@ namespace sc {
     }
 
     void svg_smooth_cubic_bezier::add_attributes(const std::vector<double> &values) {
-        set_point(2, previous->get_point(3));
+        set_point(2, (get_start() * 2) - previous->get_point(3));
         set_point(3, values[0], values[1], relative);
         set_relative_end(values[2], values[3]);
         if (values.size() >= 8) {
@@ -654,18 +713,98 @@ namespace sc {
     }
 
 
+    svg_element *svg_circle::clone() const {
+        return new svg_circle(*this);
+    }
+
+    void svg_circle::add_attributes(const std::map<std::string, std::string> &attributes) {
+        svg_element::add_attributes(attributes);
+    }
+
+    void svg_circle::add_attribute(const std::string &name, const std::string &value) {
+        if (add_common_attribute(name, value)) return;
+        else if (name == "r") radius = std::stod(value);
+        else if (name == "cx") points[0].x = std::stod(value);
+        else if (name == "cy") points[0].y = std::stod(value);
+        else std::cerr << "Unknown circle attribute: " << name << " = " << value << std::endl;
+    }
+
+    std::string svg_circle::string() const {
+        std::stringstream ss;
+        ss << svg_element::string() << " fill=rgba(" << fill.red() << "," << fill.green() << "," << fill.blue() << "," << fill.alpha() << ")";
+        ss << " radius=(" << radius << ")";
+        return ss.str();
+    }
+
+    std::string svg_circle::type() const {
+        return "Circle";
+    }
+
+    void svg_circle::scale(double scale_x, double scale_y) {
+        svg_element::scale(scale_x, scale_y);
+        radius *= scale_x; // If not round??
+    }
+
+
+    void svg_circle::stroke(XObjectContentContext *ctx) const {
+        double m = 0.5522847498;
+        double center_x = points[0].x; //  + radius;
+        double center_y = points[0].y; //  + radius;
+        double k = radius * m;
+
+        ctx->m(center_x, center_y + radius);
+        ctx->c(center_x + k, center_y + radius, center_x + radius, center_y + k, center_x + radius, center_y);
+        ctx->c(center_x + radius, center_y - radius + k, center_x + k, center_y - radius, center_x, center_y - radius);
+        ctx->c(center_x - k, center_y - radius, center_x - radius, center_y - k, center_x - radius, center_y);
+        ctx->c(center_x - radius, center_y + k, center_x - k, center_y + radius, center_x, center_y + radius);
+        ctx->h();
+    }
+
+    void svg_circle::draw(XObjectContentContext *ctx) const {
+        if (fill.alpha() != 0) {
+            ctx->q();
+            set_fill_type(ctx);
+            stroke(ctx);
+            do_fill(ctx);;
+            ctx->Q();
+        }
+
+        if (stroke_color.alpha() != 0) {
+            ctx->q();
+            set_stroke_type(ctx);
+            stroke(ctx);
+            ctx->s();
+            ctx->Q();
+        }
+    }
+
+
     void svg_rect::add_attributes(const std::map<std::string, std::string> &attributes) {
         svg_element::add_attributes(attributes);
         set_point(2, width, height);
     }
 
+    double svg_element::width_value(const std::string &value) const {
+        if (value.ends_with("%")) {
+            return std::stod(value.substr(0, value.size() - 1)) / 100.0 * svg->width();
+        }
+        return std::stod(value);
+    }
+
+    double svg_element::height_value(const std::string &value) const {
+        if (value.ends_with("%")) {
+            return std::stod(value.substr(0, value.size() - 1)) / 100.0 * svg->height();
+        }
+        return std::stod(value);
+    }
+
     void svg_rect::add_attribute(const std::string &name, const std::string &value) {
         if (add_common_attribute(name, value)) return;
-        else if (name == "width") width = std::stod(value);
-        else if (name == "height") height = std::stod(value);
+        else if (name == "width") width = width_value(value);
+        else if (name == "height") height = height_value(value);
         else if (name == "rx") radius_x = std::stod(value);
         else if (name == "ry") radius_y = std::stod(value);
-        else std::cout << "Unknown rect attribute: " << name << " = " << value << std::endl;
+        else std::cerr << "Unknown rect attribute: " << name << " = " << value << std::endl;
     }
 
 
@@ -698,10 +837,11 @@ namespace sc {
     }
 
     void svg_use::add_attribute(const std::string &name, const std::string &value) {
-        if (add_common_attribute(name, value)) return;
-        else if (name == "clip-path") return;
+        if (name == "x") offset.x = std::stod(value);
+        else if (name == "y") offset.y = std::stod(value);
+        else if (add_common_attribute(name, value)) return;
         else if (name == "xlink:href") fetch_named_element(value);
-        else std::cout << "Unknown use attribute: " << name << " = " << value << std::endl;
+        else std::cerr << "Unknown use attribute: " << name << " = " << value << std::endl;
     }
 
     std::string svg_use::type() const {
@@ -718,27 +858,23 @@ namespace sc {
         return new svg_use(*this);
     }
 
+    void svg_use::draw(XObjectContentContext *ctx) const {
+        if (clip_path) start_clip(ctx);
+        for (auto const &child: children) child->draw(ctx);
+        if (clip_path) end_clip(ctx);
+    }
+
     void svg_element::draw(XObjectContentContext *ctx) const {
-        std::cout << "svg_element::draw(): " << type() << std::endl;
-        if (fill != color{0, 0, 0, 0}) ctx->rg(fill.red(), fill.green(), fill.blue());
-        for (auto const &child: children) {
-            // std::cout << "child draw(" << child->string() << ")" << std::endl;
-            child->draw(ctx);
-        }
+        for (auto const &child: children) child->draw(ctx);
     }
 
     void svg_element::scale(double scale_x, double scale_y) {
         for (auto &p: points) {
             p.x *= scale_x;
             p.y *= scale_y;
-            // if (svg && (scale_x < 0 || scale_y < 0)) {
-            //     // std::cout << "Negative scale: " << scale_x << " x " << scale_y << " dims: " << svg->height() << "x" << svg->height() << " Old point " << p;
-            //     if (scale_x < 0) p.x += svg->width(); // - p.x;
-            //     if (scale_y < 0) p.y += svg->height(); // - p.y;
-            //     // std::cout << " Nwd point " << p << std::endl;
-            // }
         }
-        for (auto &child: children) { child->scale(scale_x, scale_y); }
+        if (stroke_width != 1) stroke_width *= scale_x;
+        for (auto &child: children) child->scale(scale_x, scale_y);
     }
 
     double svg_element::width() const {
@@ -764,6 +900,16 @@ namespace sc {
         reinterpret_cast<svg_header *>(svg)->add_named_element(this);
     }
 
+    void svg_element::trim(std::string &name) {
+        size_t start = name.find_first_not_of(" \t\n\r");
+        size_t end = name.find_last_not_of(" \t\n\r");
+        if (start == std::string::npos) {
+            name.clear();
+            return;
+        }
+        name = name.substr(start, end - start + 1);
+    }
+
     double svg_header::width() const {
         return viewBox.width();
     }
@@ -776,15 +922,49 @@ namespace sc {
         return viewBox;
     }
 
+
+    void svg_element::add_styles(const std::string &style) {
+        std::stringstream ss(style);
+        std::string item;
+
+        while (std::getline(ss, item, ';')) {
+            if (item.empty()) continue;
+            auto pos = item.find(':');
+            if (pos == std::string::npos) continue;
+
+            std::string name = item.substr(0, pos);
+            std::string value = item.substr(pos + 1);
+
+            trim(name);
+            trim(value);
+
+            add_style(name, value);
+        }
+    }
+
+    void svg_element::add_style(const std::string &name, const std::string &value) {
+        if (name == "fill") set_fill(value);
+        else if (name == "stroke") set_stroke(value);
+        else if (name == "stroke-width") set_stroke_width(std::stod(value));
+        else std::cerr << "Unknown style attribute: " << name << " = " << value << std::endl;
+    }
+
+
     bool svg_element::add_common_attribute(const std::string &name, const std::string &value) {
         if (name == "id") set_id(value);
         else if (name == "fill") set_fill(value);
         else if (name == "stroke") set_stroke(value);
         else if (name == "stroke-width") set_stroke_width(std::stod(value));
+        else if (name == "stroke-linecap") stroke_cap = (value == "round" ? 1 : (value == "square" ? 2 : 0));
+        else if (name == "stroke-linejoin") stroke_join = (value == "round" ? 1 : (value == "bevel" ? 2 : 0));
+        else if (name == "stroke-miterlimit") stroke_miter_limit = std::stod(value);
+        else if (name == "fill-rule") fill_rule = (value == "evenodd" ? 1 : 0);
+        else if (name == "paint-order") return true;
         else if (name == "transform") transform = value;
-        else if (name == "clip-path") return true;
-        else if (name == "x") set_start_x(std::stod(value));
-        else if (name == "y") set_start_y(std::stod(value));
+        else if (name == "clip-path") fetch_clip_path(value);
+        else if (name == "x") set_start_x(width_value(value));
+        else if (name == "y") set_start_y(height_value(value));
+        else if (name == "style") add_styles(value);
         else return false;
         return true;
     }
@@ -798,14 +978,37 @@ namespace sc {
         scale(scale_x, scale_y);
     }
 
-    void svg_element::fetch_named_element(const std::string &name) {
-        const auto element = reinterpret_cast<svg_header *>(svg)->get_named_element(name.substr(1));
+    void svg_element::fetch_clip_path(const std::string &name) {
+        auto element = reinterpret_cast<svg_header *>(svg)->get_named_element(name);
         if (!element) return; // Named element not found :(
-        add_child(element->clone(), false);
+        clip_path = element->clone();
+    }
+
+    void svg_element::start_clip(XObjectContentContext *ctx) const {
+        ctx->q();
+        clip_path->stroke(ctx);
+        ctx->W();
+        ctx->n();
+    }
+
+    void svg_element::end_clip(XObjectContentContext *ctx) {
+        ctx->Q();
+    }
+
+    void svg_element::fetch_named_element(const std::string &name) {
+        auto child = reinterpret_cast<svg_header *>(svg)->get_named_element(name);
+        if (!child) return; // Named element not found :(
+        child = child->clone();
+
+        // Inherit styles
+        if (fill != color::Black) child->set_fill(fill);
+        if (stroke_color != color::Transparent) child->set_stroke(stroke_color);
+        if (stroke_width != 1) child->set_stroke_width(stroke_width);
+
+        add_child(child, false);
     }
 
     void svg_element::rotate(double angle, svg_point center) {
-        // std::cout << "Rotate " << type() << " around " << center << std::endl;
         for (auto &p: points) p.rotate(angle, center);
         for (auto &child: children) child->rotate(angle, center);
     }
@@ -817,8 +1020,31 @@ namespace sc {
     }
 
     void svg_element::normalize(svg_point mv) {
-        for (auto &p: points) p += mv;
+        if (clip_path) clip_path->normalize(mv);
         for (auto &child: children) child->normalize(mv);
+        for (auto &p: points) p += mv;
+    }
+
+
+    void svg_use::normalize(svg_point mv) {
+        svg_element::normalize(mv);
+    }
+
+    std::string svg_defs::type() const {
+        return svg_use::type();
+    }
+
+    void svg_defs::draw(XObjectContentContext *ctx) const {
+        return; // Definitions don't get drawn...
+    }
+
+    void svg_clip_path::draw(XObjectContentContext *ctx) const {
+        return; // Clip paths don't get drawn...
+    }
+
+    void svg_header::normalize(svg_point mv) {
+        svg_element::normalize(mv);
+        viewBox = {0, 0, width(), height()};
     }
 
     std::string svg_element::get_id() {
@@ -826,12 +1052,19 @@ namespace sc {
     }
 
     void svg_element::do_transform() {
-        if (!transform.empty()) {
-            std::cout << "Transform " << type() << ": " << transform << std::endl;
-            parse_transform(transform);
-            transform = ""; // Prevent double transform
-        }
         for (auto &child: children) child->do_transform();
+        if (!transform.empty()) {
+            parse_transform(transform);
+            transform = "";
+        }
+    }
+
+    void svg_use::do_transform() {
+        for (auto &child: children) child->do_transform();
+        svg_element::normalize(offset);
+        svg_element::do_transform();
+        offset = svg_point({0, 0});
+
     }
 
     void svg_element::flip() {
@@ -839,37 +1072,51 @@ namespace sc {
         for (auto &child: children) { child->flip(); }
     }
 
+    void svg_arc::flip() {
+        svg_element::flip();
+        sweep_flag = !sweep_flag;
+    }
+
     svg_element *svg_element::get_svg() const {
         return svg;
     }
 
+    std::vector<svg_element *> svg_element::get_children() {
+        return children;
+    }
+
+    void svg_element::stroke(XObjectContentContext *ctx) const {
+        for (auto const &child: children) { child->stroke(ctx); }
+    }
+
     void svg_path::draw(XObjectContentContext *ctx) const {
+        if (clip_path) start_clip(ctx);
         if (fill.alpha() != 0) {
-            ctx->rg(fill.red(), fill.green(), fill.blue());
-            for (auto const &child: children) { child->draw(ctx); }
-            ctx->f();
+            set_fill_type(ctx);
+            stroke(ctx);
+            do_fill(ctx);
         }
         if (stroke_color.alpha() != 0) {
-            ctx->RG(stroke_color.red(), stroke_color.green(), stroke_color.blue());
-            ctx->w(stroke_width);
-            for (auto const &child: children) { child->draw(ctx); }
-            ctx->s();
+            set_stroke_type(ctx);
+            stroke(ctx);
+            ctx->S();
         }
+        if (clip_path) end_clip(ctx);
     }
 
     std::string svg_clip_path::type() const {
         return "ClipPath";
     }
 
-    void svg_move::draw(XObjectContentContext *ctx) const {
+    void svg_move::stroke(XObjectContentContext *ctx) const {
         ctx->m(get_end().x, get_end().y);
     }
 
-    void svg_line::draw(XObjectContentContext *ctx) const {
+    void svg_line::stroke(XObjectContentContext *ctx) const {
         ctx->l(get_end().x, get_end().y);
     }
 
-    void svg_close::draw(XObjectContentContext *ctx) const {
+    void svg_close::stroke(XObjectContentContext *ctx) const {
         ctx->h();
     }
 
@@ -877,7 +1124,7 @@ namespace sc {
         return new svg_close(*this);
     }
 
-    void svg_cubic_bezier::draw(XObjectContentContext *ctx) const {
+    void svg_cubic_bezier::stroke(XObjectContentContext *ctx) const {
         ctx->c(points[2].x, points[2].y, points[3].x, points[3].y, points[1].x, points[1].y);
     }
 
@@ -898,19 +1145,18 @@ namespace sc {
         return "QuadraticCurve";
     }
 
-    void svg_quadratic_curve::draw(XObjectContentContext *ctx) const {
+    void svg_quadratic_curve::stroke(XObjectContentContext *ctx) const {
         auto c1 = get_start() + ((2 / 3.0) * (get_point(2) - get_start()));
         auto c2 = get_end() + ((2 / 3.0) * (get_point(2) - get_end()));
         ctx->c(c1.x, c1.y, c2.x, c2.y, points[1].x, points[1].y);
     }
 
-    void svg_rect::draw(XObjectContentContext *ctx) const {
-        ctx->q();
+    void svg_rect::stroke(XObjectContentContext *ctx) const {
         if (radius_x <= 0 && radius_y <= 0) {
             ctx->re(get_start().x, get_start().y, width, height);
         } else {
+            ctx->re(get_start().x, get_start().y, width, height);
             /*
-            if (radius > 0) {
                 radius = min(radius, min(rect.width() / 2, rect.height() / 2));
                 double control = radius * 0.448216; // Control points needed on cubic bezier curve to form a quarter circle.
                 impl->pageContentContext->m(rect.left() + radius, rect.bottom());
@@ -923,30 +1169,45 @@ namespace sc {
                 impl->pageContentContext->l(rect.left(), rect.bottom() + radius);
                 impl->pageContentContext->c(rect.left(), rect.bottom() + control, rect.left() + control, rect.bottom(), rect.left() + radius, rect.bottom());
                 impl->pageContentContext->h();
-            } else {
-                impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
-            }
-            if (filled) impl->pageContentContext->f();
-            else impl->pageContentContext->s();
-            impl->pageContentContext->Q();
-
              */
         }
+    }
+
+    void svg_rect::draw(XObjectContentContext *ctx) const {
         if (fill.alpha() != 0) {
-            ctx->rg(fill.red(), fill.green(), fill.blue());
-            ctx->f();
-        } else {
-            ctx->s();
+            ctx->q();
+            set_fill_type(ctx);
+            stroke(ctx);
+            do_fill(ctx);;
+            ctx->Q();
         }
-        // if (stroke.alpha() != 0) ctx->RG(stroke.red(), stroke.green(), stroke.blue());
-        ctx->Q();
+        if (stroke_color.alpha() != 0) {
+            ctx->q();
+            set_stroke_type(ctx);
+            stroke(ctx);
+            ctx->s();
+            ctx->Q();
+        }
     }
 
     svg_element *svg_rect::clone() const {
         return new svg_rect(*this);
     }
 
-    // void svg_smooth_cubic_bezier::draw(XObjectContentContext *ctx) const {
-    //     ctx->c(points[2].x, points[2].y, points[3].x, points[3].y, points[1].x, points[1].y);
-    // }
+    void svg_polygon::add_attribute(const std::string &name, const std::string &value) {
+        if (name == "points") {
+            parse_path("M" + value);
+            parse_path("Z");
+        } else {
+            svg_path::add_attribute(name, value);
+        }
+    }
+
+    std::string svg_polygon::type() const {
+        return "Polygon";
+    }
+
+    void svg_polygon::set_start(const svg_point &pt) {
+        svg_element::set_start(pt);
+    }
 } // sc

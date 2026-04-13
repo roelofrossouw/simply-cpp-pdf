@@ -210,28 +210,29 @@ namespace sc {
 
     void pdf::DrawObject(std::string svg_data, const rect &pos) {
         const pdf_rect rect{pos, impl->height};
-
-
-        // Pausing content context, to allow form definition
         impl->pdfWriter->PausePageContentContext(impl->pageContentContext);
-        PDFFormXObject *formXObject = impl->pdfWriter->StartFormXObject(PDFRectangle(0, 0, 100, 100));
-        XObjectContentContext *xobjectContentContext = formXObject->GetContentContext();
-
         svg2pdf p(svg_data);
-        p.resize(100, 100);
-        p.flip();
-        p.draw(xobjectContentContext);
+        PDFFormXObject *formXObject = impl->pdfWriter->StartFormXObject(PDFRectangle(0, 0, p.width(), p.height()));
+        auto *ctx = formXObject->GetContentContext();
+        p.draw(ctx);
 
         ObjectIDType formObjectID = formXObject->GetObjectID();
         auto status = impl->pdfWriter->EndFormXObjectAndRelease(formXObject);
         if (status != eSuccess) return;
 
-        // Place the image
-        auto scale_x = pos.width() / 100.0;
-        auto scale_y = pos.height() / 100.0;
+        // Scale the image
+        auto scale_x = rect.width() / p.width(); // pos.width() / standard_size;
+        auto scale_y = rect.height() / p.height(); // pos.height() / standard_size;
+        // Keep the aspect ratio:
+        scale_x = scale_y = std::min(scale_x, scale_y);
+        // Center in the target
+        auto bump_x = (rect.width() - (p.width() * scale_x)) / 2;
+        auto bump_y = (rect.height() - (p.height() * scale_y)) / 2;
+
+
         string formNameInPage = impl->pdfPage->GetResourcesDictionary().AddFormXObjectMapping(formObjectID);
         impl->pageContentContext->q();
-        impl->pageContentContext->cm(scale_x, 0, 0, scale_y, rect.left(), rect.top() - rect.height());
+        impl->pageContentContext->cm(scale_x, 0, 0, scale_y, rect.left() + bump_x, rect.top() - rect.height() + bump_y);
         impl->pageContentContext->Do(formNameInPage);
         impl->pageContentContext->Q();
     }

@@ -1,5 +1,6 @@
 #ifndef SC_SVG_ELEMENT_H
 #define SC_SVG_ELEMENT_H
+#include <iostream>
 #include <istream>
 #include <map>
 #include <vector>
@@ -23,11 +24,19 @@ namespace sc {
 
         svg_point &operator+=(const svg_point &add);
 
+        svg_point &operator-=(const svg_point &sub);
+
+        svg_point &operator*=(double factor);
+
         svg_point operator+(const svg_point &add) const;
 
         svg_point operator-(const svg_point &sub) const;
 
         void rotate(double angle, svg_point center = {0, 0});
+
+        svg_point operator*(double i) const;
+
+        bool operator==(const svg_point &svg_point) const;
     };
 
     class svg_element {
@@ -39,6 +48,12 @@ namespace sc {
         svg_element(const svg_element &other, svg_element *parent);
 
         virtual ~svg_element();
+
+        color get_fill() const;
+
+        color get_stroke() const;
+
+        double get_stroke_width() const;
 
         svg_element *add_child(svg_element *child, bool is_svg = false);
 
@@ -58,7 +73,13 @@ namespace sc {
 
         void set_point(int i, svg_point pt, bool rel = false);
 
+        double width_value(const std::string &value) const;
+
+        double height_value(const std::string &value) const;
+
         virtual void draw(XObjectContentContext *ctx) const;
+
+        virtual void stroke(XObjectContentContext *ctx) const;
 
         void virtual scale(double scale_x, double scale_y);
 
@@ -70,9 +91,21 @@ namespace sc {
 
         void set_id(const std::string &value);
 
+        void trim(std::string &name);
+
+        void add_styles(const std::string &style);
+
+        void add_style(const std::string &name, const std::string &value);
+
         bool add_common_attribute(const std::string &name, const std::string &value);
 
         void resize(int new_width, int new_height, bool keep_aspect);
+
+        void fetch_clip_path(const std::string &name);
+
+        void start_clip(XObjectContentContext *ctx) const;
+
+        static void end_clip(XObjectContentContext *ctx);
 
         [[nodiscard]] virtual svg_element *clone() const = 0;
 
@@ -85,21 +118,27 @@ namespace sc {
          */
         void normalize();
 
-        void normalize(svg_point mv);
+        virtual void normalize(svg_point mv);
 
         std::string get_id();
 
-        void do_transform();
+        virtual void do_transform();
 
         virtual void flip();
 
         svg_element *get_svg() const;
 
+        std::vector<svg_element *> get_children();
+
         static svg_element *generator(svg_element *parent, const std::string &name, const std::map<std::string, std::string> &attributes = {});
 
         void set_fill(const std::string &color_spec);
 
+        void set_fill(const color &color_spec);
+
         void set_stroke(const std::string &color_spec);
+
+        void set_stroke(const color &color_spec);
 
         void set_stroke_width(double new_width = 1);
 
@@ -113,7 +152,7 @@ namespace sc {
 
         void set_start_y(double y);
 
-        void set_start(const svg_point &pt);
+        virtual void set_start(const svg_point &pt);
 
         void set_end(double x, double y);
 
@@ -125,14 +164,22 @@ namespace sc {
 
     protected:
         bool relative;
+
         color fill = color::Black;
+        int fill_rule = 0; // 1 for evenodd
+
         color stroke_color = color::Transparent;
         double stroke_width = 1;
+        int stroke_cap = 0;
+        int stroke_join = 0;
+        double stroke_miter_limit = 10;
+
         std::string transform;
         std::string id;
         std::vector<svg_point> points; // Start = 0, End = 1, extra data after that.
         std::vector<svg_element *> children;
         svg_element *parent = nullptr, *previous = nullptr, *root = nullptr, *svg = nullptr;
+        svg_element *clip_path = nullptr;
 
         virtual void add_attributes(const std::map<std::string, std::string> &attributes);
 
@@ -145,6 +192,12 @@ namespace sc {
         std::vector<double> parse_transform_params(const std::string &s);
 
         void parse_transform(const std::string &transform);
+
+        void set_fill_type(XObjectContentContext *ctx) const;
+
+        void do_fill(XObjectContentContext *ctx) const;
+
+        void set_stroke_type(XObjectContentContext *ctx) const;
     };
 
     class svg_xml : public svg_element {
@@ -173,6 +226,8 @@ namespace sc {
         svg_element *get_named_element(const std::string &name);
 
         [[nodiscard]] svg_element *clone() const override;
+
+        void normalize(svg_point mv) override;
 
     private:
         rect viewBox{};
@@ -208,8 +263,6 @@ namespace sc {
     };
 
     class svg_path : public svg_element {
-        void draw(XObjectContentContext *ctx) const override;
-
         void add_command(char type, const std::vector<double> &values);
 
         static bool isdecimal(char character);
@@ -218,56 +271,66 @@ namespace sc {
 
         double get_double(std::istringstream &ss);
 
-        void parse_path(const std::string &value);
+    public:
+        void draw(XObjectContentContext *ctx) const override;
 
-        void add_attribute(const std::string &name, const std::string &value) override;
+        void stroke(XObjectContentContext *ctx) const override;
 
-        [[nodiscard]] std::string type() const override;
+        [[nodiscard]] svg_element *clone() const override;
 
         [[nodiscard]] std::string string() const override;
 
-    public:
-        [[nodiscard]] svg_element *clone() const override;
+    protected:
+        void parse_path(const std::string &value);
+
+        [[nodiscard]] std::string type() const override;
+
+        void add_attribute(const std::string &name, const std::string &value) override;
     };
 
     class svg_clip_path : public svg_path {
+    public:
         void draw(XObjectContentContext *ctx) const override;
 
+    protected:
         [[nodiscard]] std::string type() const override;
     };
 
 
     class svg_move : public svg_element {
-        void draw(XObjectContentContext *ctx) const override;
-
-        void add_attributes(const std::vector<double> &values) override;
-
-        [[nodiscard]] std::string type() const override;
-
     public:
         explicit svg_move(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;
+
+        void stroke(XObjectContentContext *ctx) const override;
+
+    protected:
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
     };
 
     class svg_line : public svg_element {
     public:
-        void add_attributes(const std::vector<double> &values) override;
-
-        [[nodiscard]] std::string type() const override;
-
-        void draw(XObjectContentContext *ctx) const override;
-
         explicit svg_line(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;
+
+        void stroke(XObjectContentContext *ctx) const override;
+
+    protected:
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
     };
 
     class svg_horizontal_line : public svg_line {
     public:
-        void add_attributes(const std::vector<double> &values) override;
-
         explicit svg_horizontal_line(bool is_relative = false) { relative = is_relative; }
+
+    protected:
+        void add_attributes(const std::vector<double> &values) override;
     };
 
     class svg_vertical_line : public svg_line {
@@ -290,13 +353,17 @@ namespace sc {
 
         std::string string() const override;
 
-        void draw(XObjectContentContext *ctx) const override;
+        static double angleBetween(double ux, double uy, double vx, double vy);
+
+        void stroke(XObjectContentContext *ctx) const override;
 
         void scale(double scale_x, double scale_y) override;
 
         explicit svg_arc(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;
+
+        void flip() override;
     };
 
     class svg_close : public svg_element {
@@ -306,35 +373,37 @@ namespace sc {
         [[nodiscard]] std::string type() const override;
 
     public:
-        void draw(XObjectContentContext *ctx) const override;
+        void stroke(XObjectContentContext *ctx) const override;
 
         [[nodiscard]] svg_element *clone() const override;
     };
 
     class svg_cubic_bezier : public svg_element {
+    protected:
         void add_attributes(const std::vector<double> &values) override;
 
         [[nodiscard]] std::string type() const override;
 
     public:
-        void draw(XObjectContentContext *ctx) const override;
-
         explicit svg_cubic_bezier(bool is_relative = false) { relative = is_relative; }
+
+        void stroke(XObjectContentContext *ctx) const override;
 
         [[nodiscard]] svg_element *clone() const override;
     };
 
     class svg_quadratic_curve : public svg_element {
-        void add_attributes(const std::vector<double> &values) override;
-
-        [[nodiscard]] std::string type() const override;
-
-        void draw(XObjectContentContext *ctx) const override;
-
     public:
+        void stroke(XObjectContentContext *ctx) const override;
+
         explicit svg_quadratic_curve(bool is_relative = false) { relative = is_relative; }
 
         [[nodiscard]] svg_element *clone() const override;
+
+    protected:
+        void add_attributes(const std::vector<double> &values) override;
+
+        [[nodiscard]] std::string type() const override;
     };
 
     class svg_smooth_cubic_bezier : public svg_cubic_bezier {
@@ -344,14 +413,40 @@ namespace sc {
         explicit svg_smooth_cubic_bezier(bool is_relative = false) { relative = is_relative; }
     };
 
-    class svg_rect : public svg_element {
+
+    class svg_circle : public svg_element {
+    protected:
         void add_attributes(const std::map<std::string, std::string> &attributes) override;
 
         void add_attribute(const std::string &name, const std::string &value) override;
 
+        [[nodiscard]] std::string type() const override;
+
+    public:
         [[nodiscard]] std::string string() const override;
 
+        void scale(double scale_x, double scale_y) override;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+        void stroke(XObjectContentContext *ctx) const override;
+
+        double radius{0};
+
+        [[nodiscard]] svg_element *clone() const override;
+    };
+
+
+    class svg_rect : public svg_element {
+    protected:
+        void add_attributes(const std::map<std::string, std::string> &attributes) override;
+
+        void add_attribute(const std::string &name, const std::string &value) override;
+
         [[nodiscard]] std::string type() const override;
+
+    public:
+        [[nodiscard]] std::string string() const override;
 
         void scale(double scale_x, double scale_y) override;
 
@@ -359,22 +454,55 @@ namespace sc {
 
         void draw(XObjectContentContext *ctx) const override;
 
+        void stroke(XObjectContentContext *ctx) const override;
+
         double radius_x{0}, radius_y{0};
+
         double width{0}, height{0};
 
-    public:
         [[nodiscard]] svg_element *clone() const override;
     };
 
-    class svg_use : public svg_element {
+
+    class svg_polygon : public svg_path {
+    protected:
         void add_attribute(const std::string &name, const std::string &value) override;
 
         [[nodiscard]] std::string type() const override;
 
-        [[nodiscard]] std::string string() const override;
+    public:
+        void set_start(const svg_point &pt) override;
+    };
+
+
+    class svg_use : public svg_element {
+    protected:
+        void add_attribute(const std::string &name, const std::string &value) override;
+
+        [[nodiscard]] std::string type() const override;
 
     public:
+        [[nodiscard]] std::string string() const override;
+
         [[nodiscard]] svg_element *clone() const override;
+
+        void draw(XObjectContentContext *ctx) const override;
+
+        void normalize(svg_point mv) override;
+
+        void do_transform() override;
+
+    private:
+        svg_point offset{0, 0};
+    };
+
+
+    class svg_defs : public svg_use {
+    protected:
+        [[nodiscard]] std::string type() const override;
+
+    public:
+        void draw(XObjectContentContext *ctx) const override;
     };
 } // sc
 

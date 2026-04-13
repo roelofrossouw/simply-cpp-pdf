@@ -41,7 +41,8 @@ namespace sc {
 
     void svg_parser::process(svg_processor *container) {
         walk(impl->doc.RootElement(), container);
-        container->root()->normalize();
         container->root()->do_transform();
+        container->root()->normalize();
+        container->root()->flip();
     }
 }
