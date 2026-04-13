@@ -2,21 +2,30 @@
 
 #include <vector>
 
+#include "svg_element.h"
 #include "../third_party/sc/sc.h"
 
 void draw_content_on_pdf_page(sc::pdf &pdf, sc::rect &pos) {
-    // pdf.FillRect({10, 10, 100, 100}, {0, 1, 0, 0.3});
-
-    sc::rect sp{pos};
-    double padding = 10;
-    std::vector<std::string> glyphs{"file-earmark-pdf-bs", "flag_hk", "square-empty", "calendar-day-bs", "flag_za", "camping-benches", "1web"};
-    // std::vector<std::string> glyphs{"square-empty"};
+    sc::rect sp{pos.left(), pos.top(), 130, 90};
+    // sc::rect sp{pos.left(), pos.top(), 400, 300};
+    double padding = 5;
+    std::vector<std::string> glyphs{
+        "file-earmark-pdf-bs", "flag_hk", "square-empty", "calendar-day-bs", "flag_za", "camping-benches", "1web",
+        "sun-bs", "syringe-empty", "flag_mu", "hamburger", "truck-bs", "sun", "sunrise-fill-bs", "bootstrap-reboot-bs",
+        "natis", "cup-hot-bs", "flag_mq", "flag_ch", "flag_it", "flag_tz", "flag_az", "flag_sa", "flag_bw", "flag_is",
+        "flag_gh", "flag_in", "flag_ag", "quora-bs", "flag_br"
+    };
+    // glyphs = {"camping-benches"};
+    // glyphs = {"flag_mq"};
     for (auto &glyph: glyphs) {
-        const auto svg_data = sc::rest::fetch("https://roelof.1web.co.za/images/glyph.svg?g=" + glyph);
+        std::string svg_data;
+        svg_data = sc::rest::fetch("https://roelof.1web.co.za/images/glyph.svg?g=" + glyph + "&v=2");
+        // svg_data = sc::file_get_contents("/Users/roelof/simply-cpp-pdf/test/resource/test.svg");
         // std::cout << svg_data << std::endl;
-        pdf.StrokeRect(sp + 1, 1);
 
+        pdf.FillRect(sp + 1, {0.6, 0.95, 0.4});
         pdf.DrawObject(svg_data, sp);
+        pdf.StrokeRect(sp + 1, 1);
         sp += {0, sp.height() + padding};
         if (sp.bottom() > pdf.PageHeight() - pos.top()) {
             sp = {sp.left() + sp.width() + padding, pos.top(), sp.width(), sp.height()};
@@ -63,7 +72,7 @@ void draw_content_on_pdf_page(sc::pdf &pdf, sc::rect &pos) {
 int main(int argc, char *argv[]) {
     sc::timer t;
     auto *pdf = new sc::pdf{"../output.pdf"};
-    sc::rect pos{50, 50, 150, 150};
+    sc::rect pos{30, 30, 150, 150};
     draw_content_on_pdf_page(*pdf, pos);
     // pdf->NewPage();
     // pos = sc::rect{25, 25, 50, 50};

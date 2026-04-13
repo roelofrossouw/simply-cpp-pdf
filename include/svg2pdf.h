@@ -28,6 +28,10 @@ namespace sc {
 
         void flip();
 
+        double height() const;
+
+        double width() const;
+
     private:
         svg2pdf_impl *impl;
 
