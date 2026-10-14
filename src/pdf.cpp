@@ -42,11 +42,10 @@ namespace sc {
         }
 
         // Paints the path that path() writes: filled with fill and outlined with stroke, width wide,
-        // leaving out whichever of the two is transparent. Shared by every draw() overload.
+        // leaving out whichever of the two is transparent. Shared by every shape.
         template<typename Path>
-        void paint(PageContentContext &content, const color &stroke, const color &fill, const double width, Path path) {
+        void fill_and_stroke(PageContentContext &content, const color &stroke, const color &fill, const double width, Path path) {
             const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
-            if (!stroked && !filled) return;
             content.q();
             if (filled) content.k(fill.cyan(), fill.magenta(), fill.yellow(), fill.black());
             if (stroked) {
@@ -192,32 +191,32 @@ namespace sc {
         return impl_->height;
     }
 
-    void pdf::draw_text(const std::string_view text, const rect &pos, const double size, const font_spec &font, const color &colour) {
-        auto &content = impl_->content();
+    double pdf::text_width(const std::string_view content, const font &font) {
+        return impl_->fonts.get(font)->CalculateTextAdvance(std::string{content}, font.size);
+    }
+
+    double pdf::text_x_height(const font &font) {
         PDFUsedFont *used = impl_->fonts.get(font);
+        return glyph_height(used, used->GetFreeTypeFont()->GetxHeight(), 'x', font.size);
+    }
+
+    double pdf::text_cap_height(const font &font) {
+        PDFUsedFont *used = impl_->fonts.get(font);
+        return glyph_height(used, used->GetFreeTypeFont()->GetCapHeight(), 'H', font.size);
+    }
+
+    void pdf::paint_text(const text &sample, const color &colour) {
+        auto &content = impl_->content();
+        PDFUsedFont *used = impl_->fonts.get(sample.font);
         content.BT();
         content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
-        content.Tf(used, size);
-        content.Td(pos.left(), impl_->y(pos.bottom()));
-        content.Tj(std::string{text});
+        content.Tf(used, sample.font.size);
+        content.Td(sample.position.x(), impl_->y(sample.position.y()));
+        content.Tj(sample.content);
         content.ET();
     }
 
-    double pdf::text_width(const std::string_view text, const font_spec &font, const double size) {
-        return impl_->fonts.get(font)->CalculateTextAdvance(std::string{text}, size);
-    }
-
-    double pdf::text_x_height(const font_spec &font, const double size) {
-        PDFUsedFont *used = impl_->fonts.get(font);
-        return glyph_height(used, used->GetFreeTypeFont()->GetxHeight(), 'x', size);
-    }
-
-    double pdf::text_cap_height(const font_spec &font, const double size) {
-        PDFUsedFont *used = impl_->fonts.get(font);
-        return glyph_height(used, used->GetFreeTypeFont()->GetCapHeight(), 'H', size);
-    }
-
-    void pdf::draw_line(const point &from, const point &to, const double width, const color &colour) {
+    void pdf::paint_line(const point &from, const point &to, const color &colour, const double width) {
         auto &content = impl_->content();
         content.q();
         content.w(width);
@@ -228,15 +227,9 @@ namespace sc {
         content.Q();
     }
 
-    void pdf::draw(const rect &pos, const color &stroke, const color &fill, const double width, double radius) {
-        // Square corners are just the polygon of them; rounded ones need curves.
-        if (radius <= 0) {
-            draw(static_cast<polygon>(pos), stroke, fill, width);
-            return;
-        }
-        const double left = pos.left(), right = pos.right(), bottom = impl_->y(pos.bottom()), top = impl_->y(pos.top());
-        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
-            radius = std::min({radius, pos.width() / 2, pos.height() / 2});
+    void pdf::paint_rounded_rect(const rect &shape, const double radius, const color &stroke, const color &fill, const double width) {
+        const double left = shape.left(), right = shape.right(), bottom = impl_->y(shape.bottom()), top = impl_->y(shape.top());
+        fill_and_stroke(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
             const double control = radius * (1 - quarter_circle); // from the corner
             content.m(left + radius, bottom);
             content.l(right - radius, bottom);
@@ -251,11 +244,10 @@ namespace sc {
         });
     }
 
-    void pdf::draw(const circle &shape, const color &stroke, const color &fill, const double width) {
+    void pdf::paint_circle(const circle &shape, const color &stroke, const color &fill, const double width) {
         const double x = shape.center().x(), y = impl_->y(shape.center().y()), r = shape.radius();
-        if (r <= 0) return;
         const double k = r * quarter_circle; // control point distance from the end points
-        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+        fill_and_stroke(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
             content.m(x + r, y);
             content.c(x + r, y + k, x + k, y + r, x, y + r);
             content.c(x - k, y + r, x - r, y + k, x - r, y);
@@ -265,21 +257,12 @@ namespace sc {
         });
     }
 
-    void pdf::draw(const polygon &shape, const color &stroke, const color &fill, const double width) {
-        if (shape.size() < 2) return;
-        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+    void pdf::paint_polygon(const polygon &shape, const color &stroke, const color &fill, const double width) {
+        fill_and_stroke(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
             content.m(shape[0].x(), impl_->y(shape[0].y()));
             for (std::size_t i = 1; i < shape.size(); ++i) content.l(shape[i].x(), impl_->y(shape[i].y()));
             content.h();
         });
-    }
-
-    void pdf::draw(const polygon_i &shape, const color &stroke, const color &fill, const double width) {
-        draw(polygon{shape}, stroke, fill, width);
-    }
-
-    void pdf::draw(const rotated_rect &shape, const color &stroke, const color &fill, const double width) {
-        draw(static_cast<polygon>(shape), stroke, fill, width);
     }
 
     void pdf::draw_image(const std::filesystem::path &filename, const rect &pos) {

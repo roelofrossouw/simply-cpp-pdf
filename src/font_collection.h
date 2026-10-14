@@ -1,7 +1,9 @@
 #ifndef SC_FONT_COLLECTION_H
 #define SC_FONT_COLLECTION_H
 
-#include "font_spec.h"
+#include <font.h>
+
+#include <tuple>
 
 #include <map>
 #include <string>
@@ -16,14 +18,15 @@ namespace sc {
         explicit font_collection(PDFWriter &writer);
 
         // Throws std::runtime_error when fontconfig finds no font file, or PDFHummus can't load it.
-        PDFUsedFont *get(const font_spec &spec);
+        PDFUsedFont *get(const font &spec);
 
         // The font file fontconfig picks for spec, "" when none.
-        static std::string font_file(const font_spec &spec);
+        static std::string font_file(const font &spec);
 
     private:
         PDFWriter &writer;
-        std::map<font_spec, PDFUsedFont *> fonts;
+        // One PDFUsedFont serves every size of a face: keyed by family, weight, italic and style.
+        std::map<std::tuple<std::string, int, bool, std::string>, PDFUsedFont *> fonts;
     };
 }
 
