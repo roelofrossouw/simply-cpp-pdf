@@ -45,6 +45,11 @@ int main() {
             CHECK_NOTHROW(pdf.draw(sc::rect{50, 140, 200, 100}, sc::color::Red, sc::color::Transparent, 2, 12));
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Transparent, sc::color{0.6, 0.95, 0.4}));
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Black, sc::color::White, 1, 6));
+            CHECK_NOTHROW(pdf.draw(sc::circle{{400, 600}, 40}, sc::color::Black, sc::color{1, 0.8, 0.2}, 2));
+            CHECK_NOTHROW(pdf.draw(sc::polygon{{300, 700}, {360, 640}, {420, 700}}, sc::color::Blue));
+            CHECK_NOTHROW(pdf.draw(sc::rotated_rect{{480, 600}, {60, 30}, 30}, sc::color::Transparent, sc::color::Green));
+            CHECK_NOTHROW(pdf.draw(sc::polygon{}, sc::color::Black)); // nothing to draw
+            CHECK_NOTHROW(pdf.draw(sc::circle{{0, 0}, 0}, sc::color::Black));
             CHECK_NOTHROW(pdf.draw_image("resource/image.png", {50, 260, 240, 160}));
             CHECK_NOTHROW(pdf.draw_image("resource/image.jpg", {300, 260, 240, 160}));
             CHECK_NOTHROW(pdf.draw_svg(badge, {50, 440, 200, 100}));
