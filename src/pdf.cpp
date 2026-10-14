@@ -1,7 +1,6 @@
 #include "pdf.h"
 
 #include "font_collection.h"
-#include "pdf_rect.h"
 #include "svg2pdf.h"
 
 #include <PDFFormXObject.h>
@@ -51,7 +50,7 @@ namespace sc {
             PDFPage *page;
             PageContentContext *content;
             // PDFHummus attaches links to the next page it writes, so they wait here until then.
-            std::vector<std::pair<std::string, PDFRectangle> > links;
+            std::vector<std::pair<std::string, rect> > links;
         };
 
         PDFWriter writer;
@@ -69,6 +68,9 @@ namespace sc {
                 throw std::runtime_error("sc::pdf: can't create " + filename.string());
             add_page();
         }
+
+        // PDF counts y up from the bottom of the page; sc::pdf, like a screen, down from the top.
+        [[nodiscard]] double y(const double page_y) const { return height - page_y; }
 
         void check_open() const {
             if (closed) throw std::logic_error("sc::pdf: drawing after close()");
@@ -99,7 +101,8 @@ namespace sc {
             bool written = true;
             for (auto &[page, content, links]: pages) {
                 written = writer.EndPageContentContext(content) == PDFHummus::eSuccess && written;
-                for (const auto &[url, area]: links) writer.AttachURLLinktoCurrentPage(url, area);
+                for (const auto &[url, area]: links)
+                    writer.AttachURLLinktoCurrentPage(url, PDFRectangle(area.left(), y(area.bottom()), area.right(), y(area.top())));
                 written = writer.WritePageAndRelease(page) == PDFHummus::eSuccess && written;
             }
             pages.clear();
@@ -171,12 +174,11 @@ namespace sc {
 
     void pdf::draw_text(const std::string_view text, const rect &pos, const double size, const font_spec &font, const color &colour) {
         auto &content = impl_->content();
-        const pdf_rect position{pos, impl_->height};
         PDFUsedFont *used = impl_->fonts.get(font);
         content.BT();
         content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
         content.Tf(used, size);
-        content.Td(position.left(), position.bottom());
+        content.Td(pos.left(), impl_->y(pos.bottom()));
         content.Tj(std::string{text});
         content.ET();
     }
@@ -200,15 +202,15 @@ namespace sc {
         content.q();
         content.w(width);
         content.K(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
-        content.m(from.x(), impl_->height - from.y());
-        content.l(to.x(), impl_->height - to.y());
+        content.m(from.x(), impl_->y(from.y()));
+        content.l(to.x(), impl_->y(to.y()));
         content.S();
         content.Q();
     }
 
     void pdf::draw_rect(const rect &pos, const double width, const color &colour, double radius, const bool filled) {
         auto &content = impl_->content();
-        const pdf_rect r{pos, impl_->height};
+        const double left = pos.left(), right = pos.right(), bottom = impl_->y(pos.bottom()), top = impl_->y(pos.top());
         content.q();
         if (filled) {
             content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
@@ -217,20 +219,20 @@ namespace sc {
             content.K(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
         }
         if (radius > 0) {
-            radius = std::min({radius, r.width() / 2, r.height() / 2});
+            radius = std::min({radius, pos.width() / 2, pos.height() / 2});
             const double control = radius * (1 - quarter_circle); // from the corner
-            content.m(r.left() + radius, r.bottom());
-            content.l(r.right() - radius, r.bottom());
-            content.c(r.right() - control, r.bottom(), r.right(), r.bottom() + control, r.right(), r.bottom() + radius);
-            content.l(r.right(), r.top() - radius);
-            content.c(r.right(), r.top() - control, r.right() - control, r.top(), r.right() - radius, r.top());
-            content.l(r.left() + radius, r.top());
-            content.c(r.left() + control, r.top(), r.left(), r.top() - control, r.left(), r.top() - radius);
-            content.l(r.left(), r.bottom() + radius);
-            content.c(r.left(), r.bottom() + control, r.left() + control, r.bottom(), r.left() + radius, r.bottom());
+            content.m(left + radius, bottom);
+            content.l(right - radius, bottom);
+            content.c(right - control, bottom, right, bottom + control, right, bottom + radius);
+            content.l(right, top - radius);
+            content.c(right, top - control, right - control, top, right - radius, top);
+            content.l(left + radius, top);
+            content.c(left + control, top, left, top - control, left, top - radius);
+            content.l(left, bottom + radius);
+            content.c(left, bottom + control, left + control, bottom, left + radius, bottom);
             content.h();
         } else {
-            content.re(r.left(), r.bottom(), r.width(), r.height());
+            content.re(left, bottom, pos.width(), pos.height());
         }
         if (filled) content.f();
         else content.S();
@@ -251,20 +253,18 @@ namespace sc {
         const auto [image_width, image_height] = impl_->writer.GetImageDimensions(file);
         if (image_width <= 0 || image_height <= 0) throw std::runtime_error("sc::pdf: can't read the image " + file);
 
-        const pdf_rect r{pos, impl_->height};
-        const double scale = std::min(r.width() / image_width, r.height() / image_height);
+        const double scale = std::min(pos.width() / image_width, pos.height() / image_height);
         AbstractContentContext::ImageOptions options;
         options.transformationMethod = AbstractContentContext::eMatrix;
         options.matrix[0] = options.matrix[3] = scale;
-        const double x = r.left() + (r.width() - image_width * scale) / 2;
-        const double y = r.bottom() + (r.height() - image_height * scale) / 2;
+        const double x = pos.left() + (pos.width() - image_width * scale) / 2;
+        const double y = impl_->y(pos.bottom()) + (pos.height() - image_height * scale) / 2;
         impl_->pause();
         if (content.DrawImage(x, y, file, options) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't draw the image " + file);
     }
 
     void pdf::draw_svg(const std::string_view svg, const rect &pos) {
         auto &content = impl_->content();
-        const pdf_rect r{pos, impl_->height};
         const svg2pdf drawing{svg};
         if (drawing.width() <= 0 || drawing.height() <= 0) throw std::runtime_error("sc::pdf: the SVG has no size");
 
@@ -274,9 +274,9 @@ namespace sc {
         const ObjectIDType form_id = form->GetObjectID();
         if (impl_->writer.EndFormXObjectAndRelease(form) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't write the SVG");
 
-        const double scale = std::min(r.width() / drawing.width(), r.height() / drawing.height());
-        const double x = r.left() + (r.width() - drawing.width() * scale) / 2;
-        const double y = r.bottom() + (r.height() - drawing.height() * scale) / 2;
+        const double scale = std::min(pos.width() / drawing.width(), pos.height() / drawing.height());
+        const double x = pos.left() + (pos.width() - drawing.width() * scale) / 2;
+        const double y = impl_->y(pos.bottom()) + (pos.height() - drawing.height() * scale) / 2;
         const std::string name = impl_->pages[impl_->current].page->GetResourcesDictionary().AddFormXObjectMapping(form_id);
         content.q();
         content.cm(scale, 0, 0, scale, x, y);
@@ -286,6 +286,6 @@ namespace sc {
 
     void pdf::add_link(const std::string &url, const rect &pos) {
         impl_->check_open();
-        impl_->pages[impl_->current].links.emplace_back(url, pdf_rect{pos, impl_->height});
+        impl_->pages[impl_->current].links.emplace_back(url, pos);
     }
 }
