@@ -1,17 +1,14 @@
 #include "svg_element.h"
 #include <iostream>
-#include <math.h>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <ranges>
 #include <sstream>
 
 namespace sc {
     std::ostream &operator<<(std::ostream &lhs, const svg_point &rhs) {
         lhs << "(" << rhs.x << "," << rhs.y << ")";
-        return lhs;
-    }
-
-    std::ostream &operator<<(std::ostream &lhs, const rect &rhs) {
-        lhs << "rect(" << rhs.left() << "," << rhs.top() << ") @ (" << rhs.width() << "x" << rhs.height() << ")";
         return lhs;
     }
 
@@ -408,7 +405,7 @@ namespace sc {
     }
 
     double svg_path::get_double(std::istringstream &ss) {
-        char next = ss.peek();
+        int next = ss.peek(); // int: EOF is not a char
         while (isspace(next) || next == ',') {
             ss.get();
             next = ss.peek();
@@ -417,7 +414,7 @@ namespace sc {
         bool gotdecimal = false;
         bool gotsign = false;
         next = ss.peek();
-        while (next != EOF && (isnumber(next) || issign(next) || isdecimal(next))) {
+        while (next != EOF && (std::isdigit(next) || issign(next) || isdecimal(next))) {
             if (issign(next)) {
                 if (gotsign) break;
             }
@@ -822,6 +819,8 @@ namespace sc {
     void svg_rect::scale(double scale_x, double scale_y) {
         width *= scale_x;
         height *= scale_y;
+        radius_x *= std::fabs(scale_x);
+        radius_y *= std::fabs(scale_y);
         svg_element::scale(scale_x, scale_y);
     }
 
@@ -1152,25 +1151,30 @@ namespace sc {
     }
 
     void svg_rect::stroke(XObjectContentContext *ctx) const {
-        if (radius_x <= 0 && radius_y <= 0) {
-            ctx->re(get_start().x, get_start().y, width, height);
-        } else {
-            ctx->re(get_start().x, get_start().y, width, height);
-            /*
-                radius = min(radius, min(rect.width() / 2, rect.height() / 2));
-                double control = radius * 0.448216; // Control points needed on cubic bezier curve to form a quarter circle.
-                impl->pageContentContext->m(rect.left() + radius, rect.bottom());
-                impl->pageContentContext->l(rect.right() - radius, rect.bottom());
-                impl->pageContentContext->c(rect.right() - control, rect.bottom(), rect.right(), rect.bottom() + control, rect.right(), rect.bottom() + radius);
-                impl->pageContentContext->l(rect.right(), rect.top() - radius);
-                impl->pageContentContext->c(rect.right(), rect.top() - control, rect.right() - control, rect.top(), rect.right() - radius, rect.top());
-                impl->pageContentContext->l(rect.left() + radius, rect.top());
-                impl->pageContentContext->c(rect.left() + control, rect.top(), rect.left(), rect.top() - control, rect.left(), rect.top() - radius);
-                impl->pageContentContext->l(rect.left(), rect.bottom() + radius);
-                impl->pageContentContext->c(rect.left(), rect.bottom() + control, rect.left() + control, rect.bottom(), rect.left() + radius, rect.bottom());
-                impl->pageContentContext->h();
-             */
+        const double x0 = get_start().x, y0 = get_start().y, x1 = x0 + width, y1 = y0 + height;
+        // SVG: rx or ry alone sets both, and neither is more than half the side.
+        double rx = radius_x > 0 ? radius_x : radius_y;
+        double ry = radius_y > 0 ? radius_y : radius_x;
+        rx = std::min(rx, std::fabs(width) / 2);
+        ry = std::min(ry, std::fabs(height) / 2);
+        if (rx <= 0 || ry <= 0) {
+            ctx->re(x0, y0, width, height);
+            return;
         }
+        // width and height turn negative when flipped, so the corners go the way they point.
+        rx = std::copysign(rx, width);
+        ry = std::copysign(ry, height);
+        constexpr double k = 1 - 0.5522847498; // a quarter circle as a Bezier curve: control points from the corner
+        ctx->m(x0 + rx, y0);
+        ctx->l(x1 - rx, y0);
+        ctx->c(x1 - rx * k, y0, x1, y0 + ry * k, x1, y0 + ry);
+        ctx->l(x1, y1 - ry);
+        ctx->c(x1, y1 - ry * k, x1 - rx * k, y1, x1 - rx, y1);
+        ctx->l(x0 + rx, y1);
+        ctx->c(x0 + rx * k, y1, x0, y1 - ry * k, x0, y1 - ry);
+        ctx->l(x0, y0 + ry);
+        ctx->c(x0, y0 + ry * k, x0 + rx * k, y0, x0 + rx, y0);
+        ctx->h();
     }
 
     void svg_rect::draw(XObjectContentContext *ctx) const {

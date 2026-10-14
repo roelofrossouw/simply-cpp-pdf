@@ -1,2 +1,0 @@
-# exclude tests from exported git archives
-PDFWriterTesting export-ignore

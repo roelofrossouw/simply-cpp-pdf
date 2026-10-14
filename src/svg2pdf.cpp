@@ -51,14 +51,12 @@ namespace sc {
         return impl->root->width();
     }
 
-    svg2pdf::svg2pdf(const std::string_view xml_data) : impl(new svg2pdf_impl) {
+    svg2pdf::svg2pdf(const std::string_view xml_data) : impl(std::make_unique<svg2pdf_impl>()) {
         svg_parser p(xml_data);
         p.process(this);
     }
 
-    svg2pdf::~svg2pdf() {
-        delete impl;
-    }
+    svg2pdf::~svg2pdf() = default;
 
     std::ostream &operator<<(std::ostream &lhs, const svg2pdf &rhs) {
         lhs << *rhs.impl->root << std::endl;

@@ -1,304 +1,291 @@
-#include <pdf.h>
-#include <font_collection.h>
-#include <pdf_rect.h>
-#include <iostream>
-#include "sc.h"
-#include "InputStringStream.h"
+#include "pdf.h"
+
+#include "font_collection.h"
+#include "pdf_rect.h"
 #include "svg2pdf.h"
-#include "include/color.h"
 
-#include "PDFWriter.h"
-#include "PDFPage.h"
-#include "PageContentContext.h"
-#include "PDFFormXObject.h"
-#include "PDFUsedFont.h"
-#include "ResourcesDictionary.h"
-#include "XObjectContentContext.h"
+#include <PDFFormXObject.h>
+#include <PDFPage.h>
+#include <PDFUsedFont.h>
+#include <PDFWriter.h>
+#include <PageContentContext.h>
+#include <ResourcesDictionary.h>
+#include <XObjectContentContext.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
-using namespace std;
+#include <algorithm>
+#include <iostream>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace sc {
-    class hummus_impl {
-    public:
-        PDFWriter *pdfWriter;
-        PDFPage *pdfPage;
-        PageContentContext *pageContentContext;
-        page_size size{};
-        vector<pair<PDFPage *, PageContentContext *> > pages;
-        double width{};
-        double height{};
-        unsigned int current_page = 0;
-
-        double page_width() const {
+    namespace {
+        std::pair<double, double> dimensions(const page_size size) {
             switch (size) {
-                case A4: return 595;
-                case A5: return 420;
-                case Letter: return 612;
-                case Legal: return 612;
-                default: return 595;
+                case page_size::a5: return {420, 595};
+                case page_size::letter: return {612, 792};
+                case page_size::legal: return {612, 1008};
+                case page_size::a4: break;
             }
-            return 595;
+            return {595, 842};
         }
 
-        double page_height() const {
-            switch (size) {
-                case A4: return 842;
-                case A5: return 594;
-                case Letter: return 792;
-                case Legal: return 842;
-                default: return 842;
-            }
-            return 842;
+        // A height from the font's OS/2 table, in points; when the font doesn't give it (DejaVu, for
+        // one), how far letter rises above the baseline.
+        double glyph_height(PDFUsedFont *font, const std::pair<bool, FT_Short> &declared, const char letter, const double size) {
+            if (declared.first && declared.second > 0) return declared.second * size / 1000; // thousandths of the size
+            FT_Face face = *font->GetFreeTypeFont();
+            if (!face || face->units_per_EM == 0 || FT_Load_Char(face, letter, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) return 0;
+            return static_cast<double>(face->glyph->metrics.horiBearingY) * size / face->units_per_EM;
         }
 
-        void create_page(page_size new_size = Default) {
-            if (pageContentContext) if (eSuccess != pdfWriter->PausePageContentContext(pageContentContext)) cerr << "Error ending Page Page Context";
-            if (new_size != Default) size = new_size;
-            pdfPage = new PDFPage();
-            width = page_width();
-            height = page_height();
-            pdfPage->SetMediaBox({0, 0, width, height});
-            pageContentContext = pdfWriter->StartPageContentContext(pdfPage);
-            pages.emplace_back(pdfPage, pageContentContext);
-            current_page = pages.size();
-        }
-
-
-        PDFUsedFont *get_font(const font_spec &font_spec) {
-            auto font = fc.get_font(font_spec);
-            if (font) return font;
-            auto font_file = fc.get_font_file(font_spec);
-            font = pdfWriter->GetFontForFile(font_file, 0);
-            // font->GetFreeTypeFont()->GetFontFlags();
-            fc.add_font(font_spec, font);
-            return font;
-        }
-
-        void SetPage(unsigned int page_number) {
-            if (current_page == page_number) return;
-            while (pages.size() < page_number) create_page();
-            if (pageContentContext) pdfWriter->PausePageContentContext(pageContentContext);
-            pdfPage = pages[page_number - 1].first;
-            pageContentContext = pages[page_number - 1].second;
-            width = page_width();
-            height = page_height();
-            current_page = page_number;
-        }
-
-        hummus_impl(const page_size size = A4) : pdfWriter(new PDFWriter()), pdfPage(nullptr), pageContentContext(nullptr) {
-            create_page(size);
-        }
-
-        ~hummus_impl() {
-            for (auto &page: pages) {
-                pdfWriter->EndPageContentContext(page.second);
-                pdfWriter->WritePageAndRelease(page.first);
-            }
-            if (eSuccess != pdfWriter->EndPDF()) cerr << "Error ending PDF";
-            delete pdfWriter;
-        }
-
-        // private:
-        font_collection fc;
-    };
-
-    static const string scSystemFontsPath = "/System/Library/Fonts/Supplemental/";
-
-    pdf::pdf(const std::string &filename, page_size size) {
-        impl = new hummus_impl(size);
-        impl->pdfWriter->StartPDF(filename, ePDFVersion14, LogConfiguration::DefaultLogConfiguration(), PDFCreationSettings(false, true));
+        // Control point distance for a quarter circle drawn as one cubic Bezier curve, as a fraction
+        // of its radius.
+        constexpr double quarter_circle = 0.5522847498;
     }
 
-    pdf::pdf(const char *filename) {
-        impl = new hummus_impl();
-        impl->pdfWriter->StartPDF(filename, ePDFVersion14, LogConfiguration::DefaultLogConfiguration(), PDFCreationSettings(false, true));
+    struct pdf::impl {
+        struct page_state {
+            PDFPage *page;
+            PageContentContext *content;
+            // PDFHummus attaches links to the next page it writes, so they wait here until then.
+            std::vector<std::pair<std::string, PDFRectangle> > links;
+        };
+
+        PDFWriter writer;
+        font_collection fonts{writer};
+        double width;
+        double height;
+        std::vector<page_state> pages;
+        unsigned current = 0; // index into pages
+        bool closed = false;
+
+        impl(const std::filesystem::path &filename, const page_size size) {
+            std::tie(width, height) = dimensions(size);
+            if (writer.StartPDF(filename.string(), ePDFVersion14, LogConfiguration::DefaultLogConfiguration(),
+                                PDFCreationSettings(true, true)) != PDFHummus::eSuccess)
+                throw std::runtime_error("sc::pdf: can't create " + filename.string());
+            add_page();
+        }
+
+        void check_open() const {
+            if (closed) throw std::logic_error("sc::pdf: drawing after close()");
+        }
+
+        PageContentContext &content() {
+            check_open();
+            return *pages[current].content;
+        }
+
+        void add_page() {
+            pause();
+            auto *page = new PDFPage();
+            page->SetMediaBox(PDFRectangle(0, 0, width, height));
+            pages.push_back({page, writer.StartPageContentContext(page), {}});
+            current = static_cast<unsigned>(pages.size() - 1);
+        }
+
+        // PDFHummus needs the open page content paused before it writes another object (another
+        // page's content, an image or form). Using the context again carries on where it stopped.
+        void pause() {
+            if (!pages.empty()) writer.PausePageContentContext(pages[current].content);
+        }
+
+        void close() {
+            if (closed) return;
+            closed = true;
+            bool written = true;
+            for (auto &[page, content, links]: pages) {
+                written = writer.EndPageContentContext(content) == PDFHummus::eSuccess && written;
+                for (const auto &[url, area]: links) writer.AttachURLLinktoCurrentPage(url, area);
+                written = writer.WritePageAndRelease(page) == PDFHummus::eSuccess && written;
+            }
+            pages.clear();
+            if (writer.EndPDF() != PDFHummus::eSuccess || !written) throw std::runtime_error("sc::pdf: writing the file failed");
+        }
+    };
+
+    pdf::pdf(const std::filesystem::path &filename, const page_size size) : impl_(std::make_unique<impl>(filename, size)) {
     }
 
     pdf::~pdf() {
-        // if (eSuccess != impl->pdfWriter->EndPageContentContext(impl->pageContentContext)) cerr << "Error ending Page Page Context";
-        // if (eSuccess != impl->pdfWriter->WritePageAndRelease(impl->pdfPage)) cerr << "Error ending PDF Page";
-        // if (eSuccess != impl->pdfWriter->EndPDF()) cerr << "Error ending PDF";
-        delete impl;
-    }
-
-    void pdf::NewPage() {
-        impl->create_page();
-    }
-
-    bool pdf::DrawImage(const std::string &filename) {
-        // Create an image object from image
-        // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromPNGFile(filename);
-        // PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromJPGFile(filename);
-        InputStringStream strm{file_get_contents(filename)};
-        PDFFormXObject *image = impl->pdfWriter->CreateFormXObjectFromPNGStream(&strm);
-        if (!image) return false;
-
-        impl->pageContentContext->q();
-        impl->pageContentContext->cm(0.4, 0, 0, 0.4, 57.5, 241);
-        impl->pageContentContext->Do(impl->pdfPage->GetResourcesDictionary().AddFormXObjectMapping(image->GetObjectID()));
-        impl->pageContentContext->Q();
-
-        delete image;
-        return true;
-    }
-
-    bool pdf::MoreText(const string &text, const rect &pos) {
-        const pdf_rect position{pos, impl->height};
-        impl->pageContentContext->BT();
-        impl->pageContentContext->Td(position.left(), position.bottom());
-        impl->pageContentContext->Tj(text);
-        impl->pageContentContext->ET();
-        return true;
-    }
-
-    bool pdf::DrawText(const string &text, const rect &pos, const double &fontsize, const font_spec &font, const color &col) {
-        const pdf_rect position{pos, impl->height};
-        impl->pageContentContext->BT();
-        impl->pageContentContext->k(col.cyan(), col.magenta(), col.yellow(), col.black());
-        impl->pageContentContext->Tf(impl->get_font(font), fontsize);
-        impl->pageContentContext->Td(position.left(), position.bottom());
-        impl->pageContentContext->Tj(text);
-        impl->pageContentContext->ET();
-        return true;
-    }
-
-    void pdf::DrawLine(const rect &pos, double width, const color &col) {
-        const pdf_rect rect{pos, impl->height};
-        impl->pageContentContext->q();
-        impl->pageContentContext->w(width);
-        impl->pageContentContext->K(col.cyan(), col.magenta(), col.yellow(), col.black());
-        impl->pageContentContext->m(rect.left(), rect.bottom());
-        impl->pageContentContext->l(rect.right(), rect.top());
-        impl->pageContentContext->s();
-        impl->pageContentContext->Q();
-    }
-
-    void pdf::DrawRect(const rect &pos, double width, const color &col, double radius, bool filled = false) {
-        const pdf_rect rect{pos, impl->height};
-        impl->pageContentContext->q();
-        if (width > 0) impl->pageContentContext->w(width);
-        if (filled) impl->pageContentContext->k(col.cyan(), col.magenta(), col.yellow(), col.black());
-        else impl->pageContentContext->K(col.cyan(), col.magenta(), col.yellow(), col.black());
-        if (radius > 0) {
-            radius = min(radius, min(rect.width() / 2, rect.height() / 2));
-            double control = radius * 0.448216; // Control points needed on cubic bezier curve to form a quarter circle.
-            impl->pageContentContext->m(rect.left() + radius, rect.bottom());
-            impl->pageContentContext->l(rect.right() - radius, rect.bottom());
-            impl->pageContentContext->c(rect.right() - control, rect.bottom(), rect.right(), rect.bottom() + control, rect.right(), rect.bottom() + radius);
-            impl->pageContentContext->l(rect.right(), rect.top() - radius);
-            impl->pageContentContext->c(rect.right(), rect.top() - control, rect.right() - control, rect.top(), rect.right() - radius, rect.top());
-            impl->pageContentContext->l(rect.left() + radius, rect.top());
-            impl->pageContentContext->c(rect.left() + control, rect.top(), rect.left(), rect.top() - control, rect.left(), rect.top() - radius);
-            impl->pageContentContext->l(rect.left(), rect.bottom() + radius);
-            impl->pageContentContext->c(rect.left(), rect.bottom() + control, rect.left() + control, rect.bottom(), rect.left() + radius, rect.bottom());
-            impl->pageContentContext->h();
-        } else {
-            impl->pageContentContext->re(rect.left(), rect.bottom(), rect.width(), rect.height());
+        if (!impl_) return;
+        try {
+            impl_->close();
+        } catch (const std::exception &error) {
+            std::cerr << error.what() << '\n';
         }
-        if (filled) impl->pageContentContext->f();
-        else impl->pageContentContext->s();
-        impl->pageContentContext->Q();
     }
 
-    void pdf::StrokeRect(const rect &pos, double width, const color &col, const double radius) {
-        DrawRect(pos, width, col, radius, false);
+    pdf::pdf(pdf &&) noexcept = default;
+
+    pdf &pdf::operator=(pdf &&other) noexcept {
+        if (this != &other) {
+            if (impl_) {
+                try {
+                    impl_->close();
+                } catch (const std::exception &error) {
+                    std::cerr << error.what() << '\n';
+                }
+            }
+            impl_ = std::move(other.impl_);
+        }
+        return *this;
     }
 
-    void pdf::FillRect(const rect &pos, const color &col, const double radius) {
-        DrawRect(pos, 0, col, radius, true);
+    void pdf::close() {
+        impl_->close();
     }
 
-    void pdf::DrawObject(std::string svg_data, const rect &pos) {
-        const pdf_rect rect{pos, impl->height};
-        impl->pdfWriter->PausePageContentContext(impl->pageContentContext);
-        svg2pdf p(svg_data);
-        PDFFormXObject *formXObject = impl->pdfWriter->StartFormXObject(PDFRectangle(0, 0, p.width(), p.height()));
-        auto *ctx = formXObject->GetContentContext();
-        p.draw(ctx);
-
-        ObjectIDType formObjectID = formXObject->GetObjectID();
-        auto status = impl->pdfWriter->EndFormXObjectAndRelease(formXObject);
-        if (status != eSuccess) return;
-
-        // Scale the image
-        auto scale_x = rect.width() / p.width(); // pos.width() / standard_size;
-        auto scale_y = rect.height() / p.height(); // pos.height() / standard_size;
-        // Keep the aspect ratio:
-        scale_x = scale_y = std::min(scale_x, scale_y);
-        // Center in the target
-        auto bump_x = (rect.width() - (p.width() * scale_x)) / 2;
-        auto bump_y = (rect.height() - (p.height() * scale_y)) / 2;
-
-
-        string formNameInPage = impl->pdfPage->GetResourcesDictionary().AddFormXObjectMapping(formObjectID);
-        impl->pageContentContext->q();
-        impl->pageContentContext->cm(scale_x, 0, 0, scale_y, rect.left() + bump_x, rect.top() - rect.height() + bump_y);
-        impl->pageContentContext->Do(formNameInPage);
-        impl->pageContentContext->Q();
+    void pdf::new_page() {
+        impl_->check_open();
+        impl_->add_page();
     }
 
-    void pdf::AddLink(const std::string &url, const rect &pos) {
-        const pdf_rect rect{pos, impl->height};
-        auto had_context = impl->pageContentContext != nullptr;
-        if (had_context) impl->pdfWriter->EndPageContentContext(impl->pageContentContext);
-        impl->pdfWriter->AttachURLLinktoCurrentPage(url, rect);
-        if (had_context) impl->pageContentContext = impl->pdfWriter->StartPageContentContext(impl->pdfPage);
+    void pdf::set_page(const unsigned page) {
+        impl_->check_open();
+        if (page == 0) throw std::out_of_range("sc::pdf::set_page: pages count from 1");
+        while (impl_->pages.size() < page) impl_->add_page();
+        if (impl_->current == page - 1) return;
+        impl_->pause();
+        impl_->current = page - 1;
     }
 
-
-    void pdf::Merge() {
-        // status = pdfWriter.AppendPDFPagesFromPDF(scBasePath + "XObjectContent.PDF",PDFPageRange()).first;
-        // if(status != eSuccess)
-        //     break;
-        //
-        // // appending pages 0,1,2,3,5,6,7,8,9,10 of BasicTIFFImagesTest.PDF
-        // PDFPageRange selectivePageRange;
-        // selectivePageRange.mType = PDFPageRange::eRangeTypeSpecific;
-        // selectivePageRange.mSpecificRanges.push_back(ULongAndULong(0,3));
-        // selectivePageRange.mSpecificRanges.push_back(ULongAndULong(5,10));
-        //
-        // status = pdfWriter.AppendPDFPagesFromPDF(scBasePath + "BasicTIFFImagesTest.PDF",selectivePageRange).first;
+    unsigned pdf::page() const {
+        return impl_->current + 1;
     }
 
-    double pdf::PageHeight() const {
-        return impl->height;
+    unsigned pdf::page_count() const {
+        return static_cast<unsigned>(impl_->pages.size());
     }
 
-    double pdf::PageWidth() const {
-        return impl->width;
+    double pdf::page_width() const {
+        return impl_->width;
     }
 
-    void pdf::TestEmoji() const {
-        auto font = impl->get_font({"Segoe UI Emoji"});
-        AbstractContentContext::TextOptions textOptions(font, 48, AbstractContentContext::eGray, 0);
-        impl->pageContentContext->WriteText(75, 300, "\xe2\x9a\x93\xe2\x9a\x94\xe2\x98\xba\xf0\x9f\x98\xa8", textOptions);
-        impl->pageContentContext->WriteText(75, 350, "😂🤷🤞🤪", textOptions);
+    double pdf::page_height() const {
+        return impl_->height;
     }
 
-    double pdf::TextWidth(const std::string &text, const font_spec &font, const float size) const {
-        return impl->get_font(font)->CalculateTextAdvance(text, size);
+    void pdf::draw_text(const std::string_view text, const rect &pos, const double size, const font_spec &font, const color &colour) {
+        auto &content = impl_->content();
+        const pdf_rect position{pos, impl_->height};
+        PDFUsedFont *used = impl_->fonts.get(font);
+        content.BT();
+        content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
+        content.Tf(used, size);
+        content.Td(position.left(), position.bottom());
+        content.Tj(std::string{text});
+        content.ET();
     }
 
-    double pdf::TextXHeight(const font_spec &font) const {
-        auto result = impl->get_font(font)->GetFreeTypeFont()->GetxHeight();
-        if (result.first) return result.second;
-        return 0;
+    double pdf::text_width(const std::string_view text, const font_spec &font, const double size) {
+        return impl_->fonts.get(font)->CalculateTextAdvance(std::string{text}, size);
     }
 
-    double pdf::TextCapHeight(const font_spec &font) const {
-        auto result = impl->get_font(font)->GetFreeTypeFont()->GetCapHeight();
-        if (result.first) return result.second;
-        return 0;
+    double pdf::text_x_height(const font_spec &font, const double size) {
+        PDFUsedFont *used = impl_->fonts.get(font);
+        return glyph_height(used, used->GetFreeTypeFont()->GetxHeight(), 'x', size);
     }
 
-    void pdf::SetPage(unsigned int page_number) {
-        impl->SetPage(page_number);
+    double pdf::text_cap_height(const font_spec &font, const double size) {
+        PDFUsedFont *used = impl_->fonts.get(font);
+        return glyph_height(used, used->GetFreeTypeFont()->GetCapHeight(), 'H', size);
     }
 
-    unsigned int pdf::PageCount() const {
-        return impl->pages.size();
+    void pdf::draw_line(const point &from, const point &to, const double width, const color &colour) {
+        auto &content = impl_->content();
+        content.q();
+        content.w(width);
+        content.K(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
+        content.m(from.x(), impl_->height - from.y());
+        content.l(to.x(), impl_->height - to.y());
+        content.S();
+        content.Q();
     }
 
-    void pdf::Go() {
+    void pdf::draw_rect(const rect &pos, const double width, const color &colour, double radius, const bool filled) {
+        auto &content = impl_->content();
+        const pdf_rect r{pos, impl_->height};
+        content.q();
+        if (filled) {
+            content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
+        } else {
+            content.w(width);
+            content.K(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
+        }
+        if (radius > 0) {
+            radius = std::min({radius, r.width() / 2, r.height() / 2});
+            const double control = radius * (1 - quarter_circle); // from the corner
+            content.m(r.left() + radius, r.bottom());
+            content.l(r.right() - radius, r.bottom());
+            content.c(r.right() - control, r.bottom(), r.right(), r.bottom() + control, r.right(), r.bottom() + radius);
+            content.l(r.right(), r.top() - radius);
+            content.c(r.right(), r.top() - control, r.right() - control, r.top(), r.right() - radius, r.top());
+            content.l(r.left() + radius, r.top());
+            content.c(r.left() + control, r.top(), r.left(), r.top() - control, r.left(), r.top() - radius);
+            content.l(r.left(), r.bottom() + radius);
+            content.c(r.left(), r.bottom() + control, r.left() + control, r.bottom(), r.left() + radius, r.bottom());
+            content.h();
+        } else {
+            content.re(r.left(), r.bottom(), r.width(), r.height());
+        }
+        if (filled) content.f();
+        else content.S();
+        content.Q();
+    }
+
+    void pdf::stroke_rect(const rect &pos, const double width, const color &colour, const double radius) {
+        draw_rect(pos, width, colour, radius, false);
+    }
+
+    void pdf::fill_rect(const rect &pos, const color &colour, const double radius) {
+        draw_rect(pos, 0, colour, radius, true);
+    }
+
+    void pdf::draw_image(const std::filesystem::path &filename, const rect &pos) {
+        auto &content = impl_->content();
+        const auto file = filename.string();
+        const auto [image_width, image_height] = impl_->writer.GetImageDimensions(file);
+        if (image_width <= 0 || image_height <= 0) throw std::runtime_error("sc::pdf: can't read the image " + file);
+
+        const pdf_rect r{pos, impl_->height};
+        const double scale = std::min(r.width() / image_width, r.height() / image_height);
+        AbstractContentContext::ImageOptions options;
+        options.transformationMethod = AbstractContentContext::eMatrix;
+        options.matrix[0] = options.matrix[3] = scale;
+        const double x = r.left() + (r.width() - image_width * scale) / 2;
+        const double y = r.bottom() + (r.height() - image_height * scale) / 2;
+        impl_->pause();
+        if (content.DrawImage(x, y, file, options) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't draw the image " + file);
+    }
+
+    void pdf::draw_svg(const std::string_view svg, const rect &pos) {
+        auto &content = impl_->content();
+        const pdf_rect r{pos, impl_->height};
+        const svg2pdf drawing{svg};
+        if (drawing.width() <= 0 || drawing.height() <= 0) throw std::runtime_error("sc::pdf: the SVG has no size");
+
+        impl_->pause();
+        PDFFormXObject *form = impl_->writer.StartFormXObject(PDFRectangle(0, 0, drawing.width(), drawing.height()));
+        drawing.draw(form->GetContentContext());
+        const ObjectIDType form_id = form->GetObjectID();
+        if (impl_->writer.EndFormXObjectAndRelease(form) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't write the SVG");
+
+        const double scale = std::min(r.width() / drawing.width(), r.height() / drawing.height());
+        const double x = r.left() + (r.width() - drawing.width() * scale) / 2;
+        const double y = r.bottom() + (r.height() - drawing.height() * scale) / 2;
+        const std::string name = impl_->pages[impl_->current].page->GetResourcesDictionary().AddFormXObjectMapping(form_id);
+        content.q();
+        content.cm(scale, 0, 0, scale, x, y);
+        content.Do(name);
+        content.Q();
+    }
+
+    void pdf::add_link(const std::string &url, const rect &pos) {
+        impl_->check_open();
+        impl_->pages[impl_->current].links.emplace_back(url, pdf_rect{pos, impl_->height});
     }
 }

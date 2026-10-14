@@ -1,58 +1,68 @@
-#include "../include/font_collection.h"
+#include "font_collection.h"
 
-#include <iostream>
+#include <PDFWriter.h>
+#include <PDFUsedFont.h>
 #include <fontconfig/fontconfig.h>
 
+#include <mutex>
+#include <stdexcept>
+
 namespace sc {
-    font_collection::font_collection() {
-        if (!FcInit()) {
-            invalid = true;
+    namespace {
+        // CSS weights (100..900) to fontconfig's scale.
+        int fc_weight(const int weight) {
+            if (weight <= 100) return FC_WEIGHT_THIN;
+            if (weight <= 200) return FC_WEIGHT_EXTRALIGHT;
+            if (weight <= 300) return FC_WEIGHT_LIGHT;
+            if (weight <= 350) return FC_WEIGHT_BOOK;
+            if (weight <= 400) return FC_WEIGHT_REGULAR;
+            if (weight <= 500) return FC_WEIGHT_MEDIUM;
+            if (weight <= 600) return FC_WEIGHT_DEMIBOLD;
+            if (weight <= 700) return FC_WEIGHT_BOLD;
+            if (weight <= 800) return FC_WEIGHT_EXTRABOLD;
+            return FC_WEIGHT_BLACK;
         }
+
+        const FcChar8 *fc_text(const std::string &text) { return reinterpret_cast<const FcChar8 *>(text.c_str()); }
     }
 
-    font_collection::~font_collection() {
-        FcFini();
+    font_collection::font_collection(PDFWriter &writer) : writer(writer) {
     }
 
+    std::string font_collection::font_file(const font_spec &spec) {
+        // fontconfig's default configuration is loaded once and kept for the whole process: FcFini()
+        // while another PDF still looks fonts up would pull it away underneath.
+        static std::once_flag initialised;
+        static bool available = false;
+        std::call_once(initialised, [] { available = FcInit() == FcTrue; });
+        if (!available) return {};
 
-    const std::string &font_collection::get_font_file(const font_spec &spec) {
-        if (font_files.contains(spec)) return font_files[spec];
-        std::string FontFile;
+        FcPattern *pattern = FcPatternCreate();
+        FcPatternAddString(pattern, FC_FAMILY, fc_text(spec.family));
+        FcPatternAddInteger(pattern, FC_WEIGHT, fc_weight(spec.weight));
+        FcPatternAddInteger(pattern, FC_SLANT, spec.italic ? FC_SLANT_ITALIC : FC_SLANT_ROMAN);
+        if (!spec.style.empty()) FcPatternAddString(pattern, FC_STYLE, fc_text(spec.style));
+        FcConfigSubstitute(nullptr, pattern, FcMatchPattern);
+        FcDefaultSubstitute(pattern);
 
-        if (invalid) return std::move(*new std::string);
-
-        // FcPattern *pat = FcNameParse(reinterpret_cast<const FcChar8 *>(font_name.c_str()));
-        FcPattern *pat = FcPatternCreate();
-        FcPatternAddString(pat, FC_FAMILY, spec.fc_family());
-        if (spec.fc_weight() != FC_WEIGHT_NORMAL) FcPatternAddInteger(pat, FC_WEIGHT, spec.fc_weight());
-        if (spec.is_italic()) FcPatternAddInteger(pat, FC_SLANT, FC_SLANT_ITALIC);
-        if (spec.has_style()) FcPatternAddString(pat, FC_STYLE, spec.fc_style());
-
-        FcConfigSubstitute(nullptr, pat, FcMatchPattern);
-        FcDefaultSubstitute(pat);
-
+        std::string file;
         FcResult result;
-        FcPattern *font = FcFontMatch(nullptr, pat, &result);
-        if (font) {
-            FcChar8 *dig = nullptr;
-            FcPatternGetString(font, FC_FULLNAME, 0, &dig);
-            FcChar8 *file = nullptr;
-            if (FcPatternGetString(font, FC_FILE, 0, &file) == FcResultMatch) {
-                FontFile = reinterpret_cast<const char *>(file);
-            }
+        if (FcPattern *font = FcFontMatch(nullptr, pattern, &result)) {
+            FcChar8 *path = nullptr;
+            if (FcPatternGetString(font, FC_FILE, 0, &path) == FcResultMatch) file = reinterpret_cast<const char *>(path);
             FcPatternDestroy(font);
         }
-        FcPatternDestroy(pat);
-
-        font_files[spec] = std::move(FontFile);
-        return font_files[spec];
+        FcPatternDestroy(pattern);
+        return file;
     }
 
-    void font_collection::add_font(const font_spec &font, PDFUsedFont *font_ptr) {
-        font_refs[font] = font_ptr;
+    PDFUsedFont *font_collection::get(const font_spec &spec) {
+        if (const auto found = fonts.find(spec); found != fonts.end()) return found->second;
+        const auto file = font_file(spec);
+        if (file.empty()) throw std::runtime_error("sc::pdf: fontconfig found no font for \"" + spec.family + "\"");
+        PDFUsedFont *font = writer.GetFontForFile(file, 0);
+        if (!font) throw std::runtime_error("sc::pdf: can't use the font file " + file);
+        fonts.emplace(spec, font);
+        return font;
     }
-
-    PDFUsedFont *font_collection::get_font(const font_spec &font) const {
-        return font_refs.contains(font) ? font_refs.at(font) : nullptr;
-    }
-} // rjr
+}

@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/SimplyCppFunctions.cmake")
+
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.21)
+# The static library links PDFHummus::PDFWriter; tinyxml2 and fontconfig are linked by path.
+find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
+
+include("${CMAKE_CURRENT_LIST_DIR}/sc-pdfTargets.cmake")

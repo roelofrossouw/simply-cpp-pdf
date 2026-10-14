@@ -1,34 +1,26 @@
-#ifndef TEST_BASE64_FONT_SPEC_H
-#define TEST_BASE64_FONT_SPEC_H
+#ifndef SC_FONT_SPEC_H
+#define SC_FONT_SPEC_H
 
+#include <compare>
 #include <string>
 
 namespace sc {
-
-    class font_spec {
+    // A font as fontconfig looks it up: a family ("DejaVu Sans", "Roboto", or a generic name such as
+    // "sans-serif" or "serif"), a CSS weight from 100 (thin) to 900 (black) with 400 regular and 700
+    // bold, italic or not, and optionally a style name ("Condensed Bold") that wins over the rest.
+    // fontconfig picks the closest installed font, so a missing family still gives a font.
+    struct font_spec {
         std::string family;
-        std::string style;
         int weight;
         bool italic;
+        std::string style;
 
-    public:
-        font_spec(std::string family, int weight = 400, bool italic = false, std::string style = "");
+        font_spec(std::string family = "sans-serif", int weight = 400, bool italic = false, std::string style = {});
 
-        [[nodiscard]] int fc_weight() const;
+        static font_spec bold(std::string family = "sans-serif") { return {std::move(family), 700}; }
 
-        [[nodiscard]] const unsigned char *fc_family() const;
-
-        bool operator<(const font_spec &rhs) const;
-
-        [[nodiscard]] bool is_italic() const;
-
-        [[nodiscard]] bool has_style() const;
-
-        [[nodiscard]] const unsigned char *fc_style() const;
+        auto operator<=>(const font_spec &) const = default;
     };
+}
 
-
-
-} // rjr
-
-#endif //TEST_BASE64_FONT_SPEC_H
+#endif //SC_FONT_SPEC_H
