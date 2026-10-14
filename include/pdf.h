@@ -71,10 +71,14 @@ namespace sc {
 
         void draw_line(const point &from, const point &to, double width = 1, const color &colour = color::Black);
 
-        // The outline of pos, its corners rounded with radius when that's above 0.
-        void stroke_rect(const rect &pos, double width = 1, const color &colour = color::Black, double radius = 0);
+        // The draw() overloads take an sc-core geometry and paint its outline in stroke, width
+        // points wide, and its inside in fill. A transparent colour (alpha 0, color::Transparent)
+        // leaves that part out.
 
-        void fill_rect(const rect &pos, const color &colour = color::Black, double radius = 0);
+        // A rectangle, its corners rounded with radius when that's above 0 (at most half the
+        // shorter side).
+        void draw(const rect &pos, const color &stroke, const color &fill = color::Transparent, double width = 1,
+                  double radius = 0);
 
         // A JPEG, PNG or TIFF image, scaled to fit pos with its aspect ratio kept and centred in it.
         // Throws std::runtime_error when the file can't be read as an image.
@@ -90,8 +94,6 @@ namespace sc {
     private:
         struct impl;
         std::unique_ptr<impl> impl_;
-
-        void draw_rect(const rect &pos, double width, const color &colour, double radius, bool filled);
     };
 }
 

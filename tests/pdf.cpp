@@ -42,8 +42,9 @@ int main() {
             CHECK_NOTHROW(pdf.draw_text("Hello, PDF", {50, 80}, 24));
             CHECK_NOTHROW(pdf.draw_text("Bold and blue", {50, 110}, 14, sc::font_spec::bold(), sc::color{0, 0, 1}));
             CHECK_NOTHROW(pdf.draw_line({50, 120}, {545, 120}, 0.5));
-            CHECK_NOTHROW(pdf.stroke_rect({50, 140, 200, 100}, 2, sc::color::Red, 12));
-            CHECK_NOTHROW(pdf.fill_rect({300, 140, 200, 100}, sc::color{0.6, 0.95, 0.4}));
+            CHECK_NOTHROW(pdf.draw(sc::rect{50, 140, 200, 100}, sc::color::Red, sc::color::Transparent, 2, 12));
+            CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Transparent, sc::color{0.6, 0.95, 0.4}));
+            CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Black, sc::color::White, 1, 6));
             CHECK_NOTHROW(pdf.draw_image("resource/image.png", {50, 260, 240, 160}));
             CHECK_NOTHROW(pdf.draw_image("resource/image.jpg", {300, 260, 240, 160}));
             CHECK_NOTHROW(pdf.draw_svg(badge, {50, 440, 200, 100}));

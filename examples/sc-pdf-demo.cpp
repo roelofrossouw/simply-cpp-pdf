@@ -33,8 +33,8 @@ int main(int argc, char **argv) {
 
         sc::console::heading("Lines and rectangles");
         SC_STEP(pdf.draw_line({50, 165}, {545, 165}, 0.5));
-        SC_STEP(pdf.fill_rect({50, 190, 230, 120}, sc::color{0.85, 0.93, 0.98}, 12));
-        SC_STEP(pdf.stroke_rect({50, 190, 230, 120}, 2, sc::color{0.16, 0.44, 0.59}, 12));
+        const sc::rect box{50, 190, 230, 120};
+        SC_STEP(pdf.draw(box, sc::color{0.16, 0.44, 0.59}, sc::color{0.85, 0.93, 0.98}, 2, 12)); // stroke, fill, width, radius
         SC_STEP(pdf.draw_text("A rounded box", {70, 255}, 16));
 
         sc::console::heading("An SVG drawing, scaled to fit and centred");
