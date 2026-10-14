@@ -229,12 +229,13 @@ namespace sc {
     }
 
     void pdf::draw(const rect &pos, const color &stroke, const color &fill, const double width, double radius) {
+        // Square corners are just the polygon of them; rounded ones need curves.
+        if (radius <= 0) {
+            draw(static_cast<polygon>(pos), stroke, fill, width);
+            return;
+        }
         const double left = pos.left(), right = pos.right(), bottom = impl_->y(pos.bottom()), top = impl_->y(pos.top());
         paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
-            if (radius <= 0) {
-                content.re(left, bottom, pos.width(), pos.height());
-                return;
-            }
             radius = std::min({radius, pos.width() / 2, pos.height() / 2});
             const double control = radius * (1 - quarter_circle); // from the corner
             content.m(left + radius, bottom);
