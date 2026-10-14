@@ -17,7 +17,8 @@ namespace sc {
 
     // Writes a PDF file: pages of text, shapes, images, SVG drawings and links.
     //
-    // An sc::canvas: shapes and text are drawn with its draw() calls, the same as on an sc::image.
+    // An sc::canvas: shapes and text are drawn with its draw() calls, and text measured with its
+    // text_width(), text_x_height() and text_cap_height(), the same as on an sc::image.
     // Positions are in points from the page's top-left corner, x to the right and y down, as on a
     // screen (PDF itself counts y up from the bottom; this converts). Fonts are found through
     // fontconfig and embedded. Drawing goes to the current page, which is the newest one unless
@@ -56,16 +57,6 @@ namespace sc {
 
         [[nodiscard]] double page_height() const;
 
-        // How far sample advances in its own font, in points: the width it takes when drawn. Throws
-        // std::runtime_error, as drawing it does, when no font is found.
-        [[nodiscard]] double text_width(const text &sample);
-
-        // The height of a lowercase x and of a capital H in that font, in points: what the font
-        // declares, or else the letter's own height.
-        [[nodiscard]] double text_x_height(const font &font = {});
-
-        [[nodiscard]] double text_cap_height(const font &font = {});
-
         // A JPEG, PNG or TIFF image, scaled to fit pos with its aspect ratio kept and centred in it.
         // Throws std::runtime_error when the file can't be read as an image.
         void draw_image(const std::filesystem::path &filename, const rect &pos);
@@ -87,6 +78,14 @@ namespace sc {
         void paint_line(const point &from, const point &to, const color &colour, double width) override;
 
         void paint_text(const text &sample, const color &colour) override;
+
+        // In points, in the font fontconfig finds (std::runtime_error when there's none). x and cap
+        // heights are what the font declares, or else the letter's own height.
+        double measure_width(const text &sample) override;
+
+        double measure_x_height(const font &font) override;
+
+        double measure_cap_height(const font &font) override;
 
         // Real quarter circles, not the polygon a canvas draws by default.
         void paint_rounded_rect(const rect &shape, double radius, const color &stroke, const color &fill, double width) override;
