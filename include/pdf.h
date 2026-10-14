@@ -56,9 +56,9 @@ namespace sc {
 
         [[nodiscard]] double page_height() const;
 
-        // How far text in that font advances, in points. Throws std::runtime_error, as drawing text
-        // does, when no font is found.
-        [[nodiscard]] double text_width(std::string_view content, const font &font = {});
+        // How far sample advances in its own font, in points: the width it takes when drawn. Throws
+        // std::runtime_error, as drawing it does, when no font is found.
+        [[nodiscard]] double text_width(const text &sample);
 
         // The height of a lowercase x and of a capital H in that font, in points: what the font
         // declares, or else the letter's own height.

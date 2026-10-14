@@ -191,8 +191,8 @@ namespace sc {
         return impl_->height;
     }
 
-    double pdf::text_width(const std::string_view content, const font &font) {
-        return impl_->fonts.get(font)->CalculateTextAdvance(std::string{content}, font.size);
+    double pdf::text_width(const text &sample) {
+        return impl_->fonts.get(sample.font)->CalculateTextAdvance(sample.content, sample.font.size);
     }
 
     double pdf::text_x_height(const font &font) {

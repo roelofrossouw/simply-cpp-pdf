@@ -104,11 +104,12 @@ int main() {
     SECTION("Text measurements");
     {
         sc::pdf pdf{directory / "measure.pdf"};
-        const double narrow = pdf.text_width("iii");
-        const double wide = pdf.text_width("WWW", {"sans-serif", 12});
+        const double narrow = pdf.text_width(sc::text{"iii"});
+        const double wide = pdf.text_width(sc::text{"WWW", {}, {"sans-serif", 12}});
         CHECK_LT(0.0, narrow);
         CHECK_LT(narrow, wide);
-        CHECK_NEAR(pdf.text_width("WWW", {"sans-serif", 24}), 2 * wide, 0.01);
+        CHECK_NEAR(pdf.text_width(sc::text{"WWW", {300, 400}, {"sans-serif", 24}}), 2 * wide, 0.01); // position doesn't matter
+        CHECK_EQ(pdf.text_width(sc::text{}), 0.0);
         const double x_height = pdf.text_x_height({"sans-serif", 100});
         const double cap_height = pdf.text_cap_height({"sans-serif", 100});
         CHECK_BETWEEN(x_height, 30.0, 70.0);
