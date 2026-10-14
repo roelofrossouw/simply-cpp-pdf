@@ -1,9 +1,7 @@
 #include "pdf.h"
 
 #include "font_collection.h"
-#include "svg2pdf.h"
 
-#include <PDFFormXObject.h>
 #include <PDFPage.h>
 #include <PDFUsedFont.h>
 #include <PDFWriter.h>
@@ -281,25 +279,49 @@ namespace sc {
         if (content.DrawImage(x, y, file, options) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't draw the image " + file);
     }
 
-    void pdf::draw_svg(const std::string_view svg, const rect &pos) {
+    namespace {
+        // Writes shape's steps into content, y flipped to PDF's.
+        void trace(PageContentContext &content, const path &shape, const double page_height) {
+            const auto y = [page_height](const point &p) { return page_height - p.y(); };
+            for (const auto &step: shape.steps()) {
+                switch (step.type) {
+                    case path::kind::move: content.m(step.to.x(), y(step.to)); break;
+                    case path::kind::line: content.l(step.to.x(), y(step.to)); break;
+                    case path::kind::cubic:
+                        content.c(step.first.x(), y(step.first), step.second.x(), y(step.second), step.to.x(), y(step.to));
+                        break;
+                    case path::kind::close: content.h(); break;
+                }
+            }
+        }
+    }
+
+    void pdf::paint_path(const path &shape, const color &stroke, const color &fill, const double width) {
         auto &content = impl_->content();
-        const svg2pdf drawing{svg};
-        if (drawing.width() <= 0 || drawing.height() <= 0) throw std::runtime_error("sc::pdf: the SVG has no size");
-
-        impl_->pause();
-        PDFFormXObject *form = impl_->writer.StartFormXObject(PDFRectangle(0, 0, drawing.width(), drawing.height()));
-        drawing.draw(form->GetContentContext());
-        const ObjectIDType form_id = form->GetObjectID();
-        if (impl_->writer.EndFormXObjectAndRelease(form) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't write the SVG");
-
-        const double scale = std::min(pos.width() / drawing.width(), pos.height() / drawing.height());
-        const double x = pos.left() + (pos.width() - drawing.width() * scale) / 2;
-        const double y = impl_->y(pos.bottom()) + (pos.height() - drawing.height() * scale) / 2;
-        const std::string name = impl_->pages[impl_->current].page->GetResourcesDictionary().AddFormXObjectMapping(form_id);
+        const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
         content.q();
-        content.cm(scale, 0, 0, scale, x, y);
-        content.Do(name);
+        if (filled) content.k(fill.cyan(), fill.magenta(), fill.yellow(), fill.black());
+        if (stroked) {
+            content.w(width);
+            content.K(stroke.cyan(), stroke.magenta(), stroke.yellow(), stroke.black());
+        }
+        trace(content, shape, impl_->height);
+        if (stroked && filled) shape.even_odd ? content.BStar() : content.B();
+        else if (filled) shape.even_odd ? content.fStar() : content.f();
+        else content.S();
         content.Q();
+    }
+
+    void pdf::push_clip(const path &shape) {
+        auto &content = impl_->content();
+        content.q();
+        trace(content, shape, impl_->height);
+        shape.even_odd ? content.WStar() : content.W();
+        content.n();
+    }
+
+    void pdf::pop_clip() {
+        impl_->content().Q();
     }
 
     void pdf::add_link(const std::string &url, const rect &pos) {

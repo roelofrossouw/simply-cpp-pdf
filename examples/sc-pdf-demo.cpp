@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
                                 R"(<rect width="320" height="200" rx="16" fill="#2a6f97"/>)"
                                 R"(<circle cx="160" cy="100" r="70" fill="#f4d35e"/>)"
                                 R"(<path d="M120 130 Q160 170 200 130" stroke="#2a6f97" stroke-width="8" fill="none"/></svg>)";
-        SC_STEP(pdf.draw_svg(svg, {315, 190, 230, 120}));
+        SC_STEP(pdf.draw(sc::svg{svg}, sc::rect{315, 190, 230, 120})); // sc-graphics reads it into paths
 
         sc::console::heading("A link and finishing the file");
         SC_STEP(pdf.draw(sc::text{"github.com/roelofrossouw/simply-cpp", {50, 490}}, sc::color::Blue));

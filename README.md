@@ -5,10 +5,14 @@ links, on [PDFHummus](https://github.com/galkahana/PDF-Writer).
 
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/PDF) and the [sc-pdf reference](https://github.com/roelofrossouw/simply-cpp/wiki/Reference-sc-pdf), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
 
-Positions are `sc::rect`s in points (1/72 inch) from the page's top-left
+An `sc::pdf` is an `sc::canvas` from
+[sc-graphics](https://github.com/roelofrossouw/simply-cpp-graphics): shapes,
+text, paths and SVG are drawn with the same `draw()` calls as on an
+`sc::image`. Positions are in points (1/72 inch) from the page's top-left
 corner, x to the right and y down, as on a screen; colours are `sc::color`s.
 Fonts are found through fontconfig by family, weight and slant, and embedded
-(subset) in the file. PDFHummus, tinyxml2 and fontconfig stay out of the
+(subset) in the file. Circles, rounded corners, curves and SVG stay vector
+graphics, and SVG clip paths clip. PDFHummus and fontconfig stay out of the
 headers.
 
 ```cpp
@@ -23,7 +27,7 @@ pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::color::Black, 0.5);
 pdf.draw(sc::rect{50, 130, 200, 80}, sc::color::Black);       // outline: stroke colour
 pdf.draw(sc::rect{300, 130, 200, 80}, sc::color::Black, sc::color{0.9, 0.95, 1}, 1, 8); // + fill, width, radius
 pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG, PNG or TIFF, fitted
-pdf.draw_svg(svg_text, {50, 230, 100, 100});                 // vector, fitted
+pdf.draw(sc::svg::load("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
 pdf.add_link("https://example.com", {50, 30, 120, 25});
 pdf.new_page();
 pdf.close();                                                 // or let the destructor finish it
@@ -34,9 +38,9 @@ destructor finishes an unclosed file but can only print a failure.
 `set_page(n)` goes back to an earlier page (or adds pages up to `n`), so
 things like "page 1 of 3" can be filled in at the end.
 
-The SVG support covers paths, the basic shapes (including rounded `rect`s),
-groups, transforms, clip paths, `<defs>`/`<use>` and flat fill and stroke
-colours: icons and logos, not gradients, text or filters.
+`sc::svg` (sc-graphics) reads paths, the basic shapes (including rounded
+`rect`s), groups, transforms, clip paths, `<defs>`/`<use>` and flat fill and
+stroke colours: icons and logos, not gradients, text or filters.
 
 ## Demo
 
@@ -82,7 +86,7 @@ const std::string svg = R"(<svg xmlns="http://www.w3.org/2000/svg" width="320" h
                         R"(<rect width="320" height="200" rx="16" fill="#2a6f97"/>)"
                         R"(<circle cx="160" cy="100" r="70" fill="#f4d35e"/>)"
                         R"(<path d="M120 130 Q160 170 200 130" stroke="#2a6f97" stroke-width="8" fill="none"/></svg>)";
-SC_STEP(pdf.draw_svg(svg, {315, 190, 230, 120}));
+SC_STEP(pdf.draw(sc::svg{svg}, sc::rect{315, 190, 230, 120})); // sc-graphics reads it into paths
 
 sc::console::heading("A link and finishing the file");
 SC_STEP(pdf.draw(sc::text{"github.com/roelofrossouw/simply-cpp", {50, 490}}, sc::color::Blue));
@@ -97,8 +101,8 @@ SC_SHOW(std::filesystem::file_size(output)); // bytes
 
 PDFHummus isn't packaged by Ubuntu or Homebrew, so
 [simply-cpp-pdfhummus](https://github.com/roelofrossouw/simply-cpp-pdfhummus)
-builds it from source for both. tinyxml2 (reading SVG) and fontconfig (finding
-fonts) come from the system. A machine running a program needs some fonts
+builds it from source for both. sc-graphics brings the canvas and SVG reading
+(on tinyxml2); fontconfig (finding fonts) comes from the system. A machine running a program needs some fonts
 installed; Ubuntu's fontconfig brings DejaVu.
 
 ## Building locally

@@ -54,7 +54,7 @@ int main() {
             CHECK_NOTHROW(pdf.draw(sc::circle{{0, 0}, 0}, sc::color::Black));
             CHECK_NOTHROW(pdf.draw_image("resource/image.png", {50, 260, 240, 160}));
             CHECK_NOTHROW(pdf.draw_image("resource/image.jpg", {300, 260, 240, 160}));
-            CHECK_NOTHROW(pdf.draw_svg(badge, {50, 440, 200, 100}));
+            CHECK_NOTHROW(pdf.draw(sc::svg{badge}, sc::rect{50, 440, 200, 100}));
             CHECK_NOTHROW(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 60, 150, 30}));
             pdf.close();
             CHECK_NOTHROW(pdf.close()); // twice does nothing
@@ -68,7 +68,6 @@ int main() {
         CHECK(contains(file, "/URI (https://github.com/roelofrossouw/simply-cpp)"));
         CHECK(contains(file, "/FontFile")); // the font is embedded
         CHECK(contains(file, "/Subtype /Image"));
-        CHECK(contains(file, "/Subtype /Form")); // the SVG
     }
 
     SECTION("Pages");
@@ -133,7 +132,6 @@ int main() {
         CHECK_THROWS_AS(sc::pdf(directory / "no-such-directory" / "x.pdf"), std::runtime_error);
         sc::pdf pdf{directory / "mistakes.pdf"};
         CHECK_THROWS_AS(pdf.draw_image("resource/no-such-image.png", {0, 0, 100, 100}), std::runtime_error);
-        CHECK_THROWS_AS(pdf.draw_svg("not svg at all", {0, 0, 100, 100}), std::runtime_error);
     }
 
     std::filesystem::remove_all(directory);

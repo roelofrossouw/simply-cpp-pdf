@@ -9,13 +9,14 @@ get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.21)
+# sc::canvas, which pdf implements, and sc::svg.
+find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics)
 # PDFHummus isn't in Ubuntu or Homebrew: sc-pdfhummus packages it for both.
 find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
-# Through pkg-config: jammy's libtinyxml2-dev has no CMake package. As with sc-redis's hiredis, the
-# libraries are linked by path so the exported targets don't need pkg-config.
-config_or_install_package(tinyxml2 libtinyxml2-dev tinyxml2)
+# Through pkg-config, linked by path as sc-redis does hiredis, so the exported targets don't need
+# pkg-config.
 config_or_install_package(fontconfig libfontconfig-dev fontconfig)
-foreach (library tinyxml2 fontconfig)
+foreach (library fontconfig)
     string(TOUPPER "SC_PDF_${library}_LIBRARY" cached)
     if (${cached} AND NOT EXISTS "${${cached}}")
         message(STATUS "${library}: the cached library location is gone, looking again")
@@ -28,15 +29,12 @@ set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-# Everything PDFHummus, tinyxml2 or fontconfig is in src/, out of the installed headers.
+# Everything PDFHummus or fontconfig is in src/, out of the installed headers.
 add_sc_object(pdf
         SOURCES src/font_collection.cpp src/font_collection.h
-        src/svg_element.cpp src/svg_element.h
-        src/svg_parser.cpp src/svg_parser.h
-        src/svg2pdf.cpp src/svg2pdf.h
         INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src
-        LINK_LIBRARIES sc::sc-core PDFHummus::PDFWriter PkgConfig::tinyxml2 PkgConfig::fontconfig
-        PUBLIC_LINK_LIBRARIES sc::sc-core PDFHummus::PDFWriter ${SC_PDF_TINYXML2_LIBRARY} ${SC_PDF_FONTCONFIG_LIBRARY})
+        LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter PkgConfig::fontconfig
+        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter ${SC_PDF_FONTCONFIG_LIBRARY})
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdf")
 
@@ -56,5 +54,5 @@ add_sc_example(sc-pdf-demo)
 # looks for zlib, FreeType, libjpeg, libtiff, libpng and OpenSSL when a consumer configures.
 package_sc_module(
         DEPENDS simply-cpp-pdfhummus
-        DEV_DEPENDS "simply-cpp-dev (>= 1.5.21~)" simply-cpp-pdfhummus libtinyxml2-dev libfontconfig-dev
+        DEV_DEPENDS "simply-cpp-dev (>= 1.5.21~)" simply-cpp-graphics-dev simply-cpp-pdfhummus libfontconfig-dev
         zlib1g-dev libfreetype-dev libjpeg-dev libtiff-dev libpng-dev libssl-dev)
