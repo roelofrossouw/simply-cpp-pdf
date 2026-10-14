@@ -15,7 +15,8 @@ namespace sc {
     // Page sizes, in points (1/72 inch): A4 595x842, A5 420x595, Letter 612x792, Legal 612x1008.
     enum class page_size { a4, a5, letter, legal };
 
-    // Writes a PDF file: pages of text, shapes, images, SVG drawings and links.
+    // Writes a PDF file: pages of text, shapes, images, SVG drawings (canvas::draw(sc::svg, rect))
+    // and links.
     //
     // An sc::canvas: shapes and text are drawn with its draw() calls, and text measured with its
     // text_width(), text_x_height() and text_cap_height(), the same as on an sc::image.
@@ -61,10 +62,6 @@ namespace sc {
         // Throws std::runtime_error when the file can't be read as an image.
         void draw_image(const std::filesystem::path &filename, const rect &pos);
 
-        // An SVG drawing, scaled to fit pos with its aspect ratio kept and centred in it, as vector
-        // graphics: paths, shapes, groups, transforms, clip paths and <use>, with flat colours.
-        void draw_svg(std::string_view svg, const rect &pos);
-
         // Makes pos on the current page a link to url.
         void add_link(const std::string &url, const rect &pos);
 
@@ -89,6 +86,13 @@ namespace sc {
 
         // Real quarter circles, not the polygon a canvas draws by default.
         void paint_rounded_rect(const rect &shape, double radius, const color &stroke, const color &fill, double width) override;
+
+        // Real curves; and clipping (so SVG clip paths work).
+        void paint_path(const path &shape, const color &stroke, const color &fill, double width) override;
+
+        void push_clip(const path &shape) override;
+
+        void pop_clip() override;
 
     private:
         struct impl;
