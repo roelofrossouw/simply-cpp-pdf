@@ -26,10 +26,10 @@ int main(int argc, char **argv) {
         sc::console::heading("Text: sc::text{content, where its baseline starts, sc::font}");
         SC_STEP(pdf.draw(sc::text{"simply-cpp pdf", {50, 90}, sc::font::bold("sans-serif", 32)}));
         SC_STEP(pdf.draw(sc::text{"Text, shapes and SVG on PDFHummus", {50, 120}, {"serif", 14, 400, true}}));
-        const std::string centred = "This line is centred on the page";
-        SC_SHOW(pdf.text_width(centred)); // in the default font, sans-serif 12
-        const double left = (pdf.page_width() - pdf.text_width(centred)) / 2;
-        SC_STEP(pdf.draw(sc::text{centred, {left, 150}}, sc::color{0.2, 0.2, 0.6}));
+        sc::text centred{"This line is centred on the page", {0, 150}}; // the default font, sans-serif 12
+        SC_SHOW(pdf.text_width(centred));
+        centred.position.x((pdf.page_width() - pdf.text_width(centred)) / 2);
+        SC_STEP(pdf.draw(centred, sc::color{0.2, 0.2, 0.6}));
 
         sc::console::heading("Lines and shapes: draw(geometry, stroke, fill, width)");
         SC_STEP(pdf.draw(sc::line{{50, 165}, {545, 165}}, sc::color::Black, 0.5));
