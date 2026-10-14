@@ -45,10 +45,10 @@ namespace sc {
         void fill_and_stroke(PageContentContext &content, const color &stroke, const color &fill, const double width, Path path) {
             const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
             content.q();
-            if (filled) content.k(fill.cyan(), fill.magenta(), fill.yellow(), fill.black());
+            if (filled) content.rg(fill.red(), fill.green(), fill.blue());
             if (stroked) {
                 content.w(width);
-                content.K(stroke.cyan(), stroke.magenta(), stroke.yellow(), stroke.black());
+                content.RG(stroke.red(), stroke.green(), stroke.blue());
             }
             path(content);
             if (stroked && filled) content.B();
@@ -210,7 +210,7 @@ namespace sc {
         auto &content = impl_->content();
         PDFUsedFont *used = impl_->fonts.get(sample.font);
         content.BT();
-        content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
+        content.rg(colour.red(), colour.green(), colour.blue());
         content.Tf(used, sample.font.size);
         content.Td(sample.position.x(), impl_->y(sample.position.y()));
         content.Tj(sample.content);
@@ -221,7 +221,7 @@ namespace sc {
         auto &content = impl_->content();
         content.q();
         content.w(width);
-        content.K(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
+        content.RG(colour.red(), colour.green(), colour.blue());
         content.m(from.x(), impl_->y(from.y()));
         content.l(to.x(), impl_->y(to.y()));
         content.S();
@@ -303,10 +303,10 @@ namespace sc {
         auto &content = impl_->content();
         const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
         content.q();
-        if (filled) content.k(fill.cyan(), fill.magenta(), fill.yellow(), fill.black());
+        if (filled) content.rg(fill.red(), fill.green(), fill.blue());
         if (stroked) {
             content.w(width);
-            content.K(stroke.cyan(), stroke.magenta(), stroke.yellow(), stroke.black());
+            content.RG(stroke.red(), stroke.green(), stroke.blue());
         }
         trace(content, shape, impl_->height);
         if (stroked && filled) shape.even_odd ? content.BStar() : content.B();
