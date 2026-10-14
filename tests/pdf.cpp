@@ -39,9 +39,9 @@ int main() {
             CHECK_EQ(pdf.page_width(), 595.0);
             CHECK_EQ(pdf.page_height(), 842.0);
 
-            CHECK_NOTHROW(pdf.draw_text("Hello, PDF", {50, 80}, 24));
-            CHECK_NOTHROW(pdf.draw_text("Bold and blue", {50, 110}, 14, sc::font_spec::bold(), sc::color{0, 0, 1}));
-            CHECK_NOTHROW(pdf.draw_line({50, 120}, {545, 120}, 0.5));
+            CHECK_NOTHROW(pdf.draw(sc::text{"Hello, PDF", {50, 80}, {"sans-serif", 24}}));
+            CHECK_NOTHROW(pdf.draw(sc::text{"Bold and blue", {50, 110}, sc::font::bold("sans-serif", 14)}, sc::color{0, 0, 1}));
+            CHECK_NOTHROW(pdf.draw_line({50, 120}, {545, 120}, sc::color::Black, 0.5));
             CHECK_NOTHROW(pdf.draw(sc::rect{50, 140, 200, 100}, sc::color::Red, sc::color::Transparent, 2, 12));
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Transparent, sc::color{0.6, 0.95, 0.4}));
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Black, sc::color::White, 1, 6));
@@ -58,7 +58,7 @@ int main() {
             CHECK_NOTHROW(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 60, 150, 30}));
             pdf.close();
             CHECK_NOTHROW(pdf.close()); // twice does nothing
-            CHECK_THROWS_AS(pdf.draw_text("too late", {50, 600}), std::logic_error);
+            CHECK_THROWS_AS(pdf.draw(sc::text{"too late", {50, 600}}), std::logic_error);
         }
         const auto file = read(path);
         CHECK(file.starts_with("%PDF-1.4"));
@@ -83,9 +83,9 @@ int main() {
             pdf.set_page(4); // adds pages 3 and 4
             CHECK_EQ(pdf.page_count(), 4u);
             CHECK_EQ(pdf.page(), 4u);
-            pdf.draw_text("Page four", {72, 72});
+            pdf.draw(sc::text{"Page four", {72, 72}});
             pdf.set_page(1);
-            pdf.draw_text("Back on page one", {72, 72});
+            pdf.draw(sc::text{"Back on page one", {72, 72}});
             pdf.add_link("https://example.com/one", {72, 60, 100, 20});
             CHECK_THROWS_AS(pdf.set_page(0), std::out_of_range);
         }
@@ -104,13 +104,13 @@ int main() {
     SECTION("Text measurements");
     {
         sc::pdf pdf{directory / "measure.pdf"};
-        const double narrow = pdf.text_width("iii", {}, 12);
-        const double wide = pdf.text_width("WWW", {}, 12);
+        const double narrow = pdf.text_width("iii");
+        const double wide = pdf.text_width("WWW", {"sans-serif", 12});
         CHECK_LT(0.0, narrow);
         CHECK_LT(narrow, wide);
-        CHECK_NEAR(pdf.text_width("WWW", {}, 24), 2 * wide, 0.01);
-        const double x_height = pdf.text_x_height({}, 100);
-        const double cap_height = pdf.text_cap_height({}, 100);
+        CHECK_NEAR(pdf.text_width("WWW", {"sans-serif", 24}), 2 * wide, 0.01);
+        const double x_height = pdf.text_x_height({"sans-serif", 100});
+        const double cap_height = pdf.text_cap_height({"sans-serif", 100});
         CHECK_BETWEEN(x_height, 30.0, 70.0);
         CHECK_LT(x_height, cap_height);
         CHECK_BETWEEN(cap_height, 50.0, 90.0);
@@ -122,7 +122,7 @@ int main() {
         {
             sc::pdf first{path};
             sc::pdf second{std::move(first)};
-            second.draw_text("Moved", {72, 72});
+            second.draw(sc::text{"Moved", {72, 72}});
         }
         CHECK(read(path).starts_with("%PDF-1.4"));
     }

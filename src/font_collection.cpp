@@ -29,7 +29,7 @@ namespace sc {
     font_collection::font_collection(PDFWriter &writer) : writer(writer) {
     }
 
-    std::string font_collection::font_file(const font_spec &spec) {
+    std::string font_collection::font_file(const font &spec) {
         // fontconfig's default configuration is loaded once and kept for the whole process: FcFini()
         // while another PDF still looks fonts up would pull it away underneath.
         static std::once_flag initialised;
@@ -56,13 +56,14 @@ namespace sc {
         return file;
     }
 
-    PDFUsedFont *font_collection::get(const font_spec &spec) {
-        if (const auto found = fonts.find(spec); found != fonts.end()) return found->second;
+    PDFUsedFont *font_collection::get(const font &spec) {
+        const auto key = std::tuple{spec.family, spec.weight, spec.italic, spec.style};
+        if (const auto found = fonts.find(key); found != fonts.end()) return found->second;
         const auto file = font_file(spec);
         if (file.empty()) throw std::runtime_error("sc::pdf: fontconfig found no font for \"" + spec.family + "\"");
         PDFUsedFont *font = writer.GetFontForFile(file, 0);
         if (!font) throw std::runtime_error("sc::pdf: can't use the font file " + file);
-        fonts.emplace(spec, font);
+        fonts.emplace(key, font);
         return font;
     }
 }

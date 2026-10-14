@@ -23,19 +23,19 @@ int main(int argc, char **argv) {
         SC_SHOW(pdf.page_width());  // points, 1/72 inch: A4 by default
         SC_SHOW(pdf.page_height());
 
-        sc::console::heading("Text: positions are from the top left, the baseline along the bottom");
-        SC_STEP(pdf.draw_text("simply-cpp pdf", {50, 50, 0, 40}, 32, sc::font_spec::bold()));
-        SC_STEP(pdf.draw_text("Text, shapes and SVG on PDFHummus", {50, 120}, 14, {"serif", 400, true}));
+        sc::console::heading("Text: sc::text{content, where its baseline starts, sc::font}");
+        SC_STEP(pdf.draw(sc::text{"simply-cpp pdf", {50, 90}, sc::font::bold("sans-serif", 32)}));
+        SC_STEP(pdf.draw(sc::text{"Text, shapes and SVG on PDFHummus", {50, 120}, {"serif", 14, 400, true}}));
         const std::string centred = "This line is centred on the page";
-        SC_SHOW(pdf.text_width(centred, {}, 12));
-        const double left = (pdf.page_width() - pdf.text_width(centred, {}, 12)) / 2;
-        SC_STEP(pdf.draw_text(centred, {left, 150}, 12, {}, sc::color{0.2, 0.2, 0.6}));
+        SC_SHOW(pdf.text_width(centred)); // in the default font, sans-serif 12
+        const double left = (pdf.page_width() - pdf.text_width(centred)) / 2;
+        SC_STEP(pdf.draw(sc::text{centred, {left, 150}}, sc::color{0.2, 0.2, 0.6}));
 
         sc::console::heading("Lines and shapes: draw(geometry, stroke, fill, width)");
-        SC_STEP(pdf.draw_line({50, 165}, {545, 165}, 0.5));
+        SC_STEP(pdf.draw_line({50, 165}, {545, 165}, sc::color::Black, 0.5));
         const sc::rect box{50, 190, 230, 120};
         SC_STEP(pdf.draw(box, sc::color{0.16, 0.44, 0.59}, sc::color{0.85, 0.93, 0.98}, 2, 12)); // stroke, fill, width, radius
-        SC_STEP(pdf.draw_text("A rounded box", {70, 255}, 16));
+        SC_STEP(pdf.draw(sc::text{"A rounded box", {70, 255}, {"sans-serif", 16}}));
         SC_STEP(pdf.draw(sc::circle{{110, 400}, 40}, sc::color::Black, sc::color{0.96, 0.83, 0.37}, 2));
         SC_STEP(pdf.draw(sc::polygon{{180, 440}, {230, 360}, {280, 440}}, sc::color{0.93, 0.42, 0.3}, sc::color::Transparent, 3));
         SC_STEP(pdf.draw(sc::rotated_rect{{380, 400}, {120, 50}, 20}, sc::color::Black, sc::color{0.85, 0.93, 0.98}));
@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
         SC_STEP(pdf.draw_svg(svg, {315, 190, 230, 120}));
 
         sc::console::heading("A link and finishing the file");
-        SC_STEP(pdf.draw_text("github.com/roelofrossouw/simply-cpp", {50, 490}, 12, {}, sc::color::Blue));
+        SC_STEP(pdf.draw(sc::text{"github.com/roelofrossouw/simply-cpp", {50, 490}}, sc::color::Blue));
         SC_STEP(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 476, 220, 18}));
         SC_SHOW(pdf.page_count());
         SC_STEP(pdf.close());
