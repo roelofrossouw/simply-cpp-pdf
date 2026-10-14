@@ -31,8 +31,7 @@ set(SOURCE_LINK_LIBRARIES)
 add_sc_object(font_spec)
 # Everything PDFHummus, tinyxml2 or fontconfig is in src/, out of the installed headers.
 add_sc_object(pdf
-        SOURCES src/pdf_rect.cpp src/pdf_rect.h
-        src/font_collection.cpp src/font_collection.h
+        SOURCES src/font_collection.cpp src/font_collection.h
         src/svg_element.cpp src/svg_element.h
         src/svg_parser.cpp src/svg_parser.h
         src/svg2pdf.cpp src/svg2pdf.h
