@@ -89,8 +89,10 @@ namespace sc {
         // polygons fill by the nonzero winding rule.
         void draw(const polygon &shape, const color &stroke, const color &fill = color::Transparent, double width = 1);
 
-        // A rectangle turned angle degrees about its centre, clockwise on the page (y points down),
-        // as sc-core's rotated_rect corners are.
+        void draw(const polygon_i &shape, const color &stroke, const color &fill = color::Transparent, double width = 1);
+
+        // A rectangle turned angle degrees about its centre, clockwise on the page (y points down):
+        // the polygon of its corners.
         void draw(const rotated_rect &shape, const color &stroke, const color &fill = color::Transparent,
                   double width = 1);
 

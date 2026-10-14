@@ -47,6 +47,8 @@ int main() {
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Black, sc::color::White, 1, 6));
             CHECK_NOTHROW(pdf.draw(sc::circle{{400, 600}, 40}, sc::color::Black, sc::color{1, 0.8, 0.2}, 2));
             CHECK_NOTHROW(pdf.draw(sc::polygon{{300, 700}, {360, 640}, {420, 700}}, sc::color::Blue));
+            CHECK_NOTHROW(pdf.draw(sc::polygon{{300.5, 760.25}, {360.75, 700.5}, {420.25, 760.75}}, sc::color::Blue));
+            CHECK_NOTHROW(pdf.draw(sc::polygon_i{{300, 800}, {360, 740}, {420, 800}}, sc::color::Black));
             CHECK_NOTHROW(pdf.draw(sc::rotated_rect{{480, 600}, {60, 30}, 30}, sc::color::Transparent, sc::color::Green));
             CHECK_NOTHROW(pdf.draw(sc::polygon{}, sc::color::Black)); // nothing to draw
             CHECK_NOTHROW(pdf.draw(sc::circle{{0, 0}, 0}, sc::color::Black));

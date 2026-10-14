@@ -273,23 +273,12 @@ namespace sc {
         });
     }
 
+    void pdf::draw(const polygon_i &shape, const color &stroke, const color &fill, const double width) {
+        draw(polygon{shape}, stroke, fill, width);
+    }
+
     void pdf::draw(const rotated_rect &shape, const color &stroke, const color &fill, const double width) {
-        // In doubles: converting to sc::polygon would round the corners to whole points.
-        const double radians = shape.angle() * std::acos(-1.0) / 180.0;
-        const double cosine = std::cos(radians), sine = std::sin(radians);
-        const double half_width = shape.width() / 2, half_height = shape.height() / 2;
-        const point corners[] = {{-half_width, -half_height}, {half_width, -half_height}, {half_width, half_height}, {-half_width, half_height}};
-        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
-            bool first = true;
-            for (const auto &corner: corners) {
-                const double x = shape.center().x() + corner.x() * cosine - corner.y() * sine;
-                const double y = impl_->y(shape.center().y() + corner.x() * sine + corner.y() * cosine);
-                if (first) content.m(x, y);
-                else content.l(x, y);
-                first = false;
-            }
-            content.h();
-        });
+        draw(static_cast<polygon>(shape), stroke, fill, width);
     }
 
     void pdf::draw_image(const std::filesystem::path &filename, const rect &pos) {
