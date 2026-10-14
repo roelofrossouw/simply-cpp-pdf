@@ -1,10 +1,12 @@
-// Writes a one-page PDF: a heading, text measured to centre it, lines, rounded rectangles, an SVG
-// drawing and a link. Each line shows a call, as written, and what it returned. Pass a file name to
-// write there instead of the temporary directory.
+// Writes a PDF: a heading, text measured to centre it, lines, shapes, SVG drawings (curves,
+// transforms, an even-odd hole, a clip path) and a link. Each line shows a call, as written, and
+// what it returned. Pass a file name to write there instead of the temporary directory, and an SVG
+// file to render it on a second page.
 
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <utility>
 
 #include <sc.h>
 
@@ -13,7 +15,8 @@
 int main(int argc, char **argv) {
     try {
         const std::filesystem::path output = argc > 1 ? argv[1] : std::filesystem::temp_directory_path() / "sc-pdf-demo.pdf";
-        sc::console::title("simply-cpp pdf: text, shapes, an SVG drawing and a link on an A4 page");
+        const std::filesystem::path svg_file = argc > 2 ? argv[2] : "";
+        sc::console::title("simply-cpp pdf: text, shapes, SVG drawings and a link on an A4 page");
         sc::timer sw;
 
         // [readme]
@@ -47,9 +50,37 @@ int main(int argc, char **argv) {
                                 R"(<path d="M120 130 Q160 170 200 130" stroke="#2a6f97" stroke-width="8" fill="none"/></svg>)";
         SC_STEP(pdf.draw(sc::svg{svg}, sc::rect{315, 190, 230, 120})); // sc-graphics reads it into paths
 
+        sc::console::heading("More SVG: transforms, arcs with an even-odd hole, a clip path");
+        const sc::svg star{R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">)svg"
+                           R"svg(<g transform="rotate(15 50 50)"><polygon fill="#e76f51" stroke="#264653" stroke-width="3")svg"
+                           R"svg( points="50,5 61,38 95,38 67,58 78,92 50,72 22,92 33,58 5,38 39,38"/></g></svg>)svg"};
+        const sc::svg ring{R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">)svg"
+                           R"svg(<path fill="#2a9d8f" fill-rule="evenodd" d="M5 50 A45 45 0 1 1 95 50 A45 45 0 1 1 5 50 Z)svg"
+                           R"svg( M25 50 A25 25 0 1 0 75 50 A25 25 0 1 0 25 50 Z"/></svg>)svg"};
+        const sc::svg disc{R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">)svg"
+                           R"svg(<defs><clipPath id="round"><circle cx="50" cy="50" r="45"/></clipPath></defs>)svg"
+                           R"svg(<rect clip-path="url(#round)" width="100" height="50" fill="#e9c46a"/>)svg"
+                           R"svg(<rect clip-path="url(#round)" y="50" width="100" height="50" fill="#264653"/></svg>)svg"};
+        double left_edge = 50;
+        for (const auto &[drawing, caption]: {std::pair{&star, "rotate(15)"}, std::pair{&ring, "evenodd"}, std::pair{&disc, "clip-path"}}) {
+            const sc::rect frame{left_edge, 530, 150, 150};
+            pdf.draw(frame, sc::color{0.8, 0.8, 0.8}, sc::color::Transparent, 0.5);
+            pdf.draw(*drawing, frame - 10); // 10 points inside the frame
+            pdf.draw(sc::text{caption, {left_edge, 698}, {"monospace", 10}});
+            left_edge += 172.5;
+        }
+        sc::console::step("pdf.draw(star / ring / disc, frame - 10);   // three 150-point frames");
+
         sc::console::heading("A link and finishing the file");
         SC_STEP(pdf.draw(sc::text{"github.com/roelofrossouw/simply-cpp", {50, 490}}, sc::color::Blue));
         SC_STEP(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 476, 220, 18}));
+        if (!svg_file.empty()) {
+            SC_STEP(pdf.new_page());
+            const auto drawing = sc::svg::load(svg_file);
+            sc::console::step("const auto drawing = sc::svg::load(svg_file);   // " + svg_file.string());
+            SC_SHOW(drawing.elements().size());
+            SC_STEP(pdf.draw(drawing, sc::rect{50, 50, pdf.page_width() - 100, pdf.page_height() - 100}));
+        }
         SC_SHOW(pdf.page_count());
         SC_STEP(pdf.close());
         SC_SHOW(std::filesystem::file_size(output)); // bytes

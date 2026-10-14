@@ -21,6 +21,17 @@ namespace {
 
     bool contains(const std::string &text, const std::string &part) { return text.find(part) != std::string::npos; }
 
+    // Whether an object was written into the middle of another's stream (as close() once did to the
+    // current page when it wrote the fonts of an earlier one).
+    bool objects_inside_streams(const std::string &file) {
+        for (auto start = file.find("stream\r\n"); start != std::string::npos; start = file.find("stream\r\n", start + 1)) {
+            if (start >= 3 && file.compare(start - 3, 3, "end") == 0) continue;
+            const auto end = file.find("endstream", start);
+            if (end == std::string::npos || file.substr(start, end - start).find(" 0 obj") != std::string::npos) return true;
+        }
+        return false;
+    }
+
     const std::string badge = R"(<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">)"
                               R"(<rect x="5" y="5" width="190" height="90" rx="12" fill="#2a6f97" stroke="#000000"/>)"
                               R"(<circle cx="50" cy="50" r="30" fill="#f4d35e"/>)"
@@ -89,9 +100,19 @@ int main() {
             CHECK_THROWS_AS(pdf.set_page(0), std::out_of_range);
         }
         const auto file = read(path);
+        CHECK(!objects_inside_streams(file));
         CHECK(contains(file, "/Count 4"));
         CHECK(contains(file, "/MediaBox [ 0 0 612 792 ]"));
         CHECK(contains(file, "/URI (https://example.com/one)"));
+
+        const auto two_path = directory / "two.pdf"; // ending on a later page, with fonts on both
+        {
+            sc::pdf two{two_path};
+            two.draw(sc::text{"page one", {72, 72}});
+            two.new_page();
+            two.draw(sc::text{"page two", {72, 72}, sc::font::bold()});
+        }
+        CHECK(!objects_inside_streams(read(two_path)));
 
         sc::pdf legal{directory / "legal.pdf", sc::page_size::legal};
         CHECK_EQ(legal.page_height(), 1008.0);

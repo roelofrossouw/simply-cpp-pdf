@@ -115,6 +115,9 @@ namespace sc {
         void close() {
             if (closed) return;
             closed = true;
+            // Writing a page writes what it uses (fonts, images) too: no page's content stream may be
+            // open then, or those objects land inside it.
+            pause();
             bool written = true;
             for (auto &[page, content, links]: pages) {
                 written = writer.EndPageContentContext(content) == PDFHummus::eSuccess && written;
