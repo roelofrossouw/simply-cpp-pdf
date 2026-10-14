@@ -3,9 +3,12 @@
 
 #include "font_spec.h"
 
+#include <circle.h>
 #include <color.h>
 #include <point.h>
+#include <polygon.h>
 #include <rect.h>
+#include <rotated_rect.h>
 
 #include <filesystem>
 #include <memory>
@@ -79,6 +82,17 @@ namespace sc {
         // shorter side).
         void draw(const rect &pos, const color &stroke, const color &fill = color::Transparent, double width = 1,
                   double radius = 0);
+
+        void draw(const circle &shape, const color &stroke, const color &fill = color::Transparent, double width = 1);
+
+        // A closed polygon through its points (fewer than two draw nothing). Self-intersecting
+        // polygons fill by the nonzero winding rule.
+        void draw(const polygon &shape, const color &stroke, const color &fill = color::Transparent, double width = 1);
+
+        // A rectangle turned angle degrees about its centre, clockwise on the page (y points down),
+        // as sc-core's rotated_rect corners are.
+        void draw(const rotated_rect &shape, const color &stroke, const color &fill = color::Transparent,
+                  double width = 1);
 
         // A JPEG, PNG or TIFF image, scaled to fit pos with its aspect ratio kept and centred in it.
         // Throws std::runtime_error when the file can't be read as an image.

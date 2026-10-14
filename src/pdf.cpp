@@ -14,6 +14,7 @@
 #include FT_FREETYPE_H
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <utility>
@@ -245,6 +246,48 @@ namespace sc {
             content.c(left + control, top, left, top - control, left, top - radius);
             content.l(left, bottom + radius);
             content.c(left, bottom + control, left + control, bottom, left + radius, bottom);
+            content.h();
+        });
+    }
+
+    void pdf::draw(const circle &shape, const color &stroke, const color &fill, const double width) {
+        const double x = shape.center().x(), y = impl_->y(shape.center().y()), r = shape.radius();
+        if (r <= 0) return;
+        const double k = r * quarter_circle; // control point distance from the end points
+        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+            content.m(x + r, y);
+            content.c(x + r, y + k, x + k, y + r, x, y + r);
+            content.c(x - k, y + r, x - r, y + k, x - r, y);
+            content.c(x - r, y - k, x - k, y - r, x, y - r);
+            content.c(x + k, y - r, x + r, y - k, x + r, y);
+            content.h();
+        });
+    }
+
+    void pdf::draw(const polygon &shape, const color &stroke, const color &fill, const double width) {
+        if (shape.size() < 2) return;
+        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+            content.m(shape[0].x(), impl_->y(shape[0].y()));
+            for (std::size_t i = 1; i < shape.size(); ++i) content.l(shape[i].x(), impl_->y(shape[i].y()));
+            content.h();
+        });
+    }
+
+    void pdf::draw(const rotated_rect &shape, const color &stroke, const color &fill, const double width) {
+        // In doubles: converting to sc::polygon would round the corners to whole points.
+        const double radians = shape.angle() * std::acos(-1.0) / 180.0;
+        const double cosine = std::cos(radians), sine = std::sin(radians);
+        const double half_width = shape.width() / 2, half_height = shape.height() / 2;
+        const point corners[] = {{-half_width, -half_height}, {half_width, -half_height}, {half_width, half_height}, {-half_width, half_height}};
+        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+            bool first = true;
+            for (const auto &corner: corners) {
+                const double x = shape.center().x() + corner.x() * cosine - corner.y() * sine;
+                const double y = impl_->y(shape.center().y() + corner.x() * sine + corner.y() * cosine);
+                if (first) content.m(x, y);
+                else content.l(x, y);
+                first = false;
+            }
             content.h();
         });
     }
