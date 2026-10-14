@@ -191,16 +191,16 @@ namespace sc {
         return impl_->height;
     }
 
-    double pdf::text_width(const text &sample) {
+    double pdf::measure_width(const text &sample) {
         return impl_->fonts.get(sample.font)->CalculateTextAdvance(sample.content, sample.font.size);
     }
 
-    double pdf::text_x_height(const font &font) {
+    double pdf::measure_x_height(const font &font) {
         PDFUsedFont *used = impl_->fonts.get(font);
         return glyph_height(used, used->GetFreeTypeFont()->GetxHeight(), 'x', font.size);
     }
 
-    double pdf::text_cap_height(const font &font) {
+    double pdf::measure_cap_height(const font &font) {
         PDFUsedFont *used = impl_->fonts.get(font);
         return glyph_height(used, used->GetFreeTypeFont()->GetCapHeight(), 'H', font.size);
     }
