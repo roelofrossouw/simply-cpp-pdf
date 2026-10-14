@@ -19,7 +19,7 @@ pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
 const sc::font body{"serif", 11};
 pdf.draw(sc::text{"Body text", {50, 100}, body});            // baseline at y = 100
 const double width = pdf.text_width("Body text", body);
-pdf.draw_line({50, 110}, {50 + width, 110}, sc::color::Black, 0.5);
+pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::color::Black, 0.5);
 pdf.draw(sc::rect{50, 130, 200, 80}, sc::color::Black);       // outline: stroke colour
 pdf.draw(sc::rect{300, 130, 200, 80}, sc::color::Black, sc::color{0.9, 0.95, 1}, 1, 8); // + fill, width, radius
 pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG, PNG or TIFF, fitted
@@ -69,7 +69,7 @@ const double left = (pdf.page_width() - pdf.text_width(centred)) / 2;
 SC_STEP(pdf.draw(sc::text{centred, {left, 150}}, sc::color{0.2, 0.2, 0.6}));
 
 sc::console::heading("Lines and shapes: draw(geometry, stroke, fill, width)");
-SC_STEP(pdf.draw_line({50, 165}, {545, 165}, sc::color::Black, 0.5));
+SC_STEP(pdf.draw(sc::line{{50, 165}, {545, 165}}, sc::color::Black, 0.5));
 const sc::rect box{50, 190, 230, 120};
 SC_STEP(pdf.draw(box, sc::color{0.16, 0.44, 0.59}, sc::color{0.85, 0.93, 0.98}, 2, 12)); // stroke, fill, width, radius
 SC_STEP(pdf.draw(sc::text{"A rounded box", {70, 255}, {"sans-serif", 16}}));

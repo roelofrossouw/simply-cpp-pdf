@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
         SC_STEP(pdf.draw(sc::text{centred, {left, 150}}, sc::color{0.2, 0.2, 0.6}));
 
         sc::console::heading("Lines and shapes: draw(geometry, stroke, fill, width)");
-        SC_STEP(pdf.draw_line({50, 165}, {545, 165}, sc::color::Black, 0.5));
+        SC_STEP(pdf.draw(sc::line{{50, 165}, {545, 165}}, sc::color::Black, 0.5));
         const sc::rect box{50, 190, 230, 120};
         SC_STEP(pdf.draw(box, sc::color{0.16, 0.44, 0.59}, sc::color{0.85, 0.93, 0.98}, 2, 12)); // stroke, fill, width, radius
         SC_STEP(pdf.draw(sc::text{"A rounded box", {70, 255}, {"sans-serif", 16}}));

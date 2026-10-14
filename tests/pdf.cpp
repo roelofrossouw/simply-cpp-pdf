@@ -41,7 +41,7 @@ int main() {
 
             CHECK_NOTHROW(pdf.draw(sc::text{"Hello, PDF", {50, 80}, {"sans-serif", 24}}));
             CHECK_NOTHROW(pdf.draw(sc::text{"Bold and blue", {50, 110}, sc::font::bold("sans-serif", 14)}, sc::color{0, 0, 1}));
-            CHECK_NOTHROW(pdf.draw_line({50, 120}, {545, 120}, sc::color::Black, 0.5));
+            CHECK_NOTHROW(pdf.draw(sc::line{{50, 120}, {545, 120}}, sc::color::Black, 0.5));
             CHECK_NOTHROW(pdf.draw(sc::rect{50, 140, 200, 100}, sc::color::Red, sc::color::Transparent, 2, 12));
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Transparent, sc::color{0.6, 0.95, 0.4}));
             CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::color::Black, sc::color::White, 1, 6));
