@@ -1,64 +1,62 @@
-cmake_minimum_required(VERSION 4.1)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(-Wno-psabi)
-endif()
+cmake_minimum_required(VERSION 3.22)
+set(SC_MODULE pdf)
+project(simply-cpp-${SC_MODULE} LANGUAGES CXX)
+include(cmake/sc_bootstrap.cmake)
 
-find_package(PkgConfig REQUIRED)
+option(SC_PDF_BUILD_TESTS "Build simply-cpp-pdf tests" ${PROJECT_IS_TOP_LEVEL})
 
-pkg_check_modules(FONTCONFIG REQUIRED fontconfig)
-include_directories(${FONTCONFIG_INCLUDE_DIRS})
-link_directories(${FONTCONFIG_LIBRARY_DIRS})
+get_sc_version()
+message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
-pkg_check_modules(FREETYPE2 REQUIRED freetype2)
-include_directories(${FREETYPE2_INCLUDE_DIRS})
-link_directories(${FREETYPE2_LIBRARY_DIRS})
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.21)
+# PDFHummus isn't in Ubuntu or Homebrew: sc-pdfhummus packages it for both.
+find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
+# Through pkg-config: jammy's libtinyxml2-dev has no CMake package. As with sc-redis's hiredis, the
+# libraries are linked by path so the exported targets don't need pkg-config.
+config_or_install_package(tinyxml2 libtinyxml2-dev tinyxml2)
+config_or_install_package(fontconfig libfontconfig-dev fontconfig)
+foreach (library tinyxml2 fontconfig)
+    string(TOUPPER "SC_PDF_${library}_LIBRARY" cached)
+    if (${cached} AND NOT EXISTS "${${cached}}")
+        message(STATUS "${library}: the cached library location is gone, looking again")
+        unset(${cached} CACHE)
+    endif ()
+    find_library(${cached} NAMES ${library} HINTS ${${library}_LIBRARY_DIRS} REQUIRED)
+endforeach ()
 
-pkg_check_modules(LIBJPEG REQUIRED libjpeg)
-include_directories(${LIBJPEG_INCLUDE_DIRS})
-link_directories(${LIBJPEG_LIBRARY_DIRS})
+set(SOURCE_OBJECTS)
+set(SOURCE_LIBRARIES)
+set(SOURCE_LINK_LIBRARIES)
 
-# git remote add pdf-writer https://github.com/galkahana/PDF-Writer.git
-# git stash; git subtree add --prefix=third_party/pdf-writer pdf-writer main --squash; git stash pop
-# (Update with:   git fetch pdf-writer main; git stash; git subtree pull --prefix=third_party/pdf-writer pdf-writer main --squash; git stash pop)
-set(USE_BUNDLED FALSE)
-set(USE_UNBUNDLED_FALLBACK_BUNDLED TRUE)
-add_subdirectory(third_party/pdf-writer pdf-writer EXCLUDE_FROM_ALL)
+add_sc_object(font_spec)
+# Everything PDFHummus, tinyxml2 or fontconfig is in src/, out of the installed headers.
+add_sc_object(pdf
+        SOURCES src/pdf_rect.cpp src/pdf_rect.h
+        src/font_collection.cpp src/font_collection.h
+        src/svg_element.cpp src/svg_element.h
+        src/svg_parser.cpp src/svg_parser.h
+        src/svg2pdf.cpp src/svg2pdf.h
+        INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src
+        LINK_LIBRARIES sc::sc-core PDFHummus::PDFWriter PkgConfig::tinyxml2 PkgConfig::fontconfig
+        PUBLIC_LINK_LIBRARIES sc::sc-core PDFHummus::PDFWriter ${SC_PDF_TINYXML2_LIBRARY} ${SC_PDF_FONTCONFIG_LIBRARY})
 
-# git remote add sc https://github.com/roelofrossouw/simply-cpp.git
-# git stash; git subtree add --prefix=third_party/sc sc main --squash; git stash pop
-add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
+add_sc_libraries(DESCRIPTION "simply-cpp-pdf")
 
-# git remote add tinyxml2 https://github.com/leethomason/tinyxml2.git
-# git stash; git subtree add --prefix=third_party/tinyxml2 tinyxml2 master --squash; git stash pop
-add_subdirectory(third_party/tinyxml2 EXCLUDE_FROM_ALL)
+install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
+install(FILES cmake/SimplyCppFunctions.cmake cmake/sc_bootstrap.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sc-pdf
+        COMPONENT development)
 
-#if(NOT TARGET sc)
-#    add_subdirectory(third_party/sc sc EXCLUDE_FROM_ALL)
-#endif()
-#
-#project(sc-svg-parser)
-#add_library(${PROJECT_NAME} STATIC  )
-#target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/include")
-#target_link_libraries(${PROJECT_NAME} PUBLIC sc )
-#
+if (SC_PDF_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests sc-pdf-test)
+endif ()
 
-project(sc-pdf)
-add_library(${PROJECT_NAME} SHARED
-        src/pdf.cpp
-        src/pdf_rect.cpp
-        src/font_spec.cpp
-        src/font_collection.cpp
-        src/svg_parser.cpp src/svg2pdf.cpp src/svg_element.cpp
-        include/pdf.h
-        include/pdf_rect.h
-        include/font_spec.h
-        include/font_collection.h
-        include/svg_parser.h include/svg2pdf.h include/svg_element.h)
-target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(${PROJECT_NAME} PUBLIC sc-shared tinyxml2::tinyxml2 PDFHummus::PDFWriter fontconfig)
+add_sc_example(sc-pdf-demo)
 
-project(test_pdf)
-add_executable(${PROJECT_NAME} test/pdf.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE sc-pdf)
+# simply-cpp-pdfhummus is installed by hand, not found by dpkg-shlibdeps; PDFHummus's CMake package
+# looks for zlib, FreeType, libjpeg, libtiff, libpng and OpenSSL when a consumer configures.
+package_sc_module(
+        DEPENDS simply-cpp-pdfhummus
+        DEV_DEPENDS "simply-cpp-dev (>= 1.5.21~)" simply-cpp-pdfhummus libtinyxml2-dev libfontconfig-dev
+        zlib1g-dev libfreetype-dev libjpeg-dev libtiff-dev libpng-dev libssl-dev)

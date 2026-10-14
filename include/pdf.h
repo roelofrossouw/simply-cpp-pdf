@@ -1,75 +1,98 @@
 #ifndef SC_PDF_H
 #define SC_PDF_H
-#include "font_spec.h"
-#include "include/rect.h"
-#include "include/color.h"
 
+#include "font_spec.h"
+
+#include <color.h>
+#include <point.h>
+#include <rect.h>
+
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <string_view>
 
 namespace sc {
-    class hummus_impl;
+    // Page sizes, in points (1/72 inch): A4 595x842, A5 420x595, Letter 612x792, Legal 612x1008.
+    enum class page_size { a4, a5, letter, legal };
 
-    enum page_size {
-        Default = 0,
-        A4 = 1,
-        A5 = 2,
-        Letter = 3,
-        Legal = 4,
-        Custom = 5
-    };
-
+    // Writes a PDF file: pages of text, lines, rectangles, images, SVG drawings and links.
+    //
+    // Positions are in points from the page's top-left corner, x to the right and y down, as on a
+    // screen (PDF itself counts y up from the bottom; this converts). Drawing goes to the current
+    // page, which is the newest one unless set_page() moved back to an earlier one. The file is
+    // finished by close(), or by the destructor, which can't report a failure.
     class pdf {
     public:
-        explicit pdf(const std::string &filename, page_size size = A4);
-
-        explicit pdf(const char *filename);
+        // Starts the file, with one page; throws std::runtime_error when it can't be created.
+        explicit pdf(const std::filesystem::path &filename, page_size size = page_size::a4);
 
         ~pdf();
 
-        bool DrawImage(const std::string &filename);
+        pdf(const pdf &) = delete;
 
-        bool MoreText(const std::string &text, const rect &pos);
+        pdf &operator=(const pdf &) = delete;
 
-        bool DrawText(const std::string &text, const rect &pos, const double &fontsize = 10, const font_spec &font = font_spec("Roboto"),
-                      const color &col = color(0, 0, 0));
+        pdf(pdf &&) noexcept;
 
-        void NewPage();
+        pdf &operator=(pdf &&) noexcept;
 
-        auto DrawLine(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1}) -> void;
+        // Writes out the pages and finishes the file; throws std::runtime_error when that fails.
+        // Nothing can be drawn afterwards. Calling it again does nothing.
+        void close();
 
-        void StrokeRect(const rect &pos, double width = 2, const color &col = {0, 0, 0, 1}, double radius = 0);
+        // Adds a page after the last one and makes it current.
+        void new_page();
 
-        void FillRect(const rect &pos, const color &col = {0, 0, 0, 1}, double radius = 0);
+        // Makes page (counting from 1) current, adding pages up to it when there are fewer.
+        void set_page(unsigned page);
 
-        void DrawObject(std::string svg_data, const rect &pos = {50, 50, 100, 100});
+        [[nodiscard]] unsigned page() const;
 
-        void AddLink(const std::string &url, const rect &pos);
+        [[nodiscard]] unsigned page_count() const;
 
-        void Merge();
+        [[nodiscard]] double page_width() const;
 
-        double PageHeight() const;
+        [[nodiscard]] double page_height() const;
 
-        double PageWidth() const;
+        // Writes text with its baseline along pos.bottom(), starting at pos.left() (a rect with no
+        // height puts the baseline at pos.top()). Throws std::runtime_error when no font is found.
+        void draw_text(std::string_view text, const rect &pos, double size = 10, const font_spec &font = {},
+                       const color &colour = color::Black);
 
-        void TestEmoji() const;
+        // How far text written in that font and size advances, in points.
+        [[nodiscard]] double text_width(std::string_view text, const font_spec &font = {}, double size = 10);
 
-        double TextWidth(const std::string &text, const font_spec &font, float size) const;
+        // The height of a lowercase x and of a capital H in that font and size, in points: what the
+        // font declares, or else the letter's own height.
+        [[nodiscard]] double text_x_height(const font_spec &font = {}, double size = 10);
 
-        double TextXHeight(const font_spec &font) const;
+        [[nodiscard]] double text_cap_height(const font_spec &font = {}, double size = 10);
 
-        double TextCapHeight(const font_spec &font) const;
+        void draw_line(const point &from, const point &to, double width = 1, const color &colour = color::Black);
 
-        void SetPage(unsigned int page_number);
+        // The outline of pos, its corners rounded with radius when that's above 0.
+        void stroke_rect(const rect &pos, double width = 1, const color &colour = color::Black, double radius = 0);
 
-        unsigned int PageCount() const;
+        void fill_rect(const rect &pos, const color &colour = color::Black, double radius = 0);
 
-        void Go();
+        // A JPEG, PNG or TIFF image, scaled to fit pos with its aspect ratio kept and centred in it.
+        // Throws std::runtime_error when the file can't be read as an image.
+        void draw_image(const std::filesystem::path &filename, const rect &pos);
+
+        // An SVG drawing, scaled to fit pos with its aspect ratio kept and centred in it, as vector
+        // graphics: paths, shapes, groups, transforms, clip paths and <use>, with flat colours.
+        void draw_svg(std::string_view svg, const rect &pos);
+
+        // Makes pos on the current page a link to url.
+        void add_link(const std::string &url, const rect &pos);
 
     private:
-        hummus_impl *impl{};
+        struct impl;
+        std::unique_ptr<impl> impl_;
 
-        void DrawRect(const rect &pos, double width, const color &col, double radius, bool filled);
+        void draw_rect(const rect &pos, double width, const color &colour, double radius, bool filled);
     };
 }
-
 
 #endif //SC_PDF_H
