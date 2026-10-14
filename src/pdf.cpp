@@ -40,6 +40,25 @@ namespace sc {
             return static_cast<double>(face->glyph->metrics.horiBearingY) * size / face->units_per_EM;
         }
 
+        // Paints the path that path() writes: filled with fill and outlined with stroke, width wide,
+        // leaving out whichever of the two is transparent. Shared by every draw() overload.
+        template<typename Path>
+        void paint(PageContentContext &content, const color &stroke, const color &fill, const double width, Path path) {
+            const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
+            if (!stroked && !filled) return;
+            content.q();
+            if (filled) content.k(fill.cyan(), fill.magenta(), fill.yellow(), fill.black());
+            if (stroked) {
+                content.w(width);
+                content.K(stroke.cyan(), stroke.magenta(), stroke.yellow(), stroke.black());
+            }
+            path(content);
+            if (stroked && filled) content.B();
+            else if (filled) content.f();
+            else content.S();
+            content.Q();
+        }
+
         // Control point distance for a quarter circle drawn as one cubic Bezier curve, as a fraction
         // of its radius.
         constexpr double quarter_circle = 0.5522847498;
@@ -208,17 +227,13 @@ namespace sc {
         content.Q();
     }
 
-    void pdf::draw_rect(const rect &pos, const double width, const color &colour, double radius, const bool filled) {
-        auto &content = impl_->content();
+    void pdf::draw(const rect &pos, const color &stroke, const color &fill, const double width, double radius) {
         const double left = pos.left(), right = pos.right(), bottom = impl_->y(pos.bottom()), top = impl_->y(pos.top());
-        content.q();
-        if (filled) {
-            content.k(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
-        } else {
-            content.w(width);
-            content.K(colour.cyan(), colour.magenta(), colour.yellow(), colour.black());
-        }
-        if (radius > 0) {
+        paint(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+            if (radius <= 0) {
+                content.re(left, bottom, pos.width(), pos.height());
+                return;
+            }
             radius = std::min({radius, pos.width() / 2, pos.height() / 2});
             const double control = radius * (1 - quarter_circle); // from the corner
             content.m(left + radius, bottom);
@@ -231,20 +246,7 @@ namespace sc {
             content.l(left, bottom + radius);
             content.c(left, bottom + control, left + control, bottom, left + radius, bottom);
             content.h();
-        } else {
-            content.re(left, bottom, pos.width(), pos.height());
-        }
-        if (filled) content.f();
-        else content.S();
-        content.Q();
-    }
-
-    void pdf::stroke_rect(const rect &pos, const double width, const color &colour, const double radius) {
-        draw_rect(pos, width, colour, radius, false);
-    }
-
-    void pdf::fill_rect(const rect &pos, const color &colour, const double radius) {
-        draw_rect(pos, 0, colour, radius, true);
+        });
     }
 
     void pdf::draw_image(const std::filesystem::path &filename, const rect &pos) {
