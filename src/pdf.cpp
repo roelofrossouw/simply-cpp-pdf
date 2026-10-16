@@ -2,6 +2,8 @@
 
 #include "font_collection.h"
 
+#include <DictionaryContext.h>
+#include <ObjectsContext.h>
 #include <PDFPage.h>
 #include <PDFUsedFont.h>
 #include <PDFWriter.h>
@@ -14,22 +16,13 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
 namespace sc {
     namespace {
-        std::pair<double, double> dimensions(const page_size size) {
-            switch (size) {
-                case page_size::a5: return {420, 595};
-                case page_size::letter: return {612, 792};
-                case page_size::legal: return {612, 1008};
-                case page_size::a4: break;
-            }
-            return {595, 842};
-        }
-
         // A height from the font's OS/2 table, in points; when the font doesn't give it (DejaVu, for
         // one), how far letter rises above the baseline.
         double glyph_height(PDFUsedFont *font, const std::pair<bool, FT_Short> &declared, const char letter, const double size) {
@@ -38,27 +31,6 @@ namespace sc {
             if (!face || face->units_per_EM == 0 || FT_Load_Char(face, letter, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING) != 0) return 0;
             return static_cast<double>(face->glyph->metrics.horiBearingY) * size / face->units_per_EM;
         }
-
-        // Paints the path that path() writes: filled by fill (by its rule) and outlined by stroke,
-        // leaving out whichever of the two is none. Shared by every shape. Colours are opaque.
-        template<typename Path>
-        void fill_and_stroke(PageContentContext &content, const sc::stroke &stroke, const sc::fill &fill, Path path) {
-            const bool stroked = stroke.visible(), filled = fill.visible();
-            const bool even_odd = fill.rule() == fill_rule::even_odd;
-            content.q();
-            if (filled) content.rg(fill.colour().red(), fill.colour().green(), fill.colour().blue());
-            if (stroked) {
-                content.w(stroke.width());
-                content.RG(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
-            }
-            path(content);
-            if (stroked && filled) even_odd ? content.BStar() : content.B();
-            else if (filled) even_odd ? content.fStar() : content.f();
-            else content.S();
-            content.Q();
-        }
-
-        // quarter_circle, the control point distance for a quarter circle, is sc-core's (path.h).
     }
 
     struct pdf::impl {
@@ -67,6 +39,8 @@ namespace sc {
             PageContentContext *content;
             // PDFHummus attaches links to the next page it writes, so they wait here until then.
             std::vector<std::pair<std::string, rect> > links;
+            // The transparency states the page uses, by their names in its resources.
+            std::map<ObjectIDType, std::string> alpha_names;
         };
 
         PDFWriter writer;
@@ -76,9 +50,15 @@ namespace sc {
         std::vector<page_state> pages;
         unsigned current = 0; // index into pages
         bool closed = false;
+        // One graphics state per (fill, stroke) alpha pair, shared by all pages; only the IDs are
+        // taken while drawing, the objects are written by close(), as nothing may be written while a
+        // page's content is open.
+        std::map<std::pair<double, double>, ObjectIDType> alpha_states;
 
-        impl(const std::filesystem::path &filename, const page_size size) {
-            std::tie(width, height) = dimensions(size);
+        impl(const std::filesystem::path &filename, const page_size size, const orientation turned) {
+            const auto page = page_dimensions(size, turned);
+            width = page.width();
+            height = page.height();
             if (writer.StartPDF(filename.string(), ePDFVersion14, LogConfiguration::DefaultLogConfiguration(),
                                 PDFCreationSettings(true, true)) != PDFHummus::eSuccess)
                 throw std::runtime_error("sc::pdf: can't create " + filename.string());
@@ -95,6 +75,41 @@ namespace sc {
         PageContentContext &content() {
             check_open();
             return *pages[current].content;
+        }
+
+        // Makes what follows (up to the content's next Q) paint at these alphas; opaque needs nothing.
+        void set_alpha(PageContentContext &content, const double fill_alpha, const double stroke_alpha) {
+            if (fill_alpha >= 1 && stroke_alpha >= 1) return;
+            auto state = alpha_states.find({fill_alpha, stroke_alpha});
+            if (state == alpha_states.end())
+                state = alpha_states.emplace(std::pair{fill_alpha, stroke_alpha},
+                                             writer.GetObjectsContext().GetInDirectObjectsRegistry().AllocateNewObjectID()).first;
+            auto &page = pages[current];
+            auto name = page.alpha_names.find(state->second);
+            if (name == page.alpha_names.end())
+                name = page.alpha_names.emplace(state->second, page.page->GetResourcesDictionary().AddExtGStateMapping(state->second)).first;
+            content.gs(name->second);
+        }
+
+        // Paints what path() writes: filled (by fill's rule) and/or stroked, leaving out whichever
+        // is none. Shared by every shape.
+        template<typename Path>
+        void paint(const sc::stroke &stroke, const sc::fill &fill, Path path) {
+            auto &page = content();
+            const bool stroked = stroke.visible(), filled = fill.visible();
+            const bool even_odd = fill.rule() == fill_rule::even_odd;
+            page.q();
+            set_alpha(page, filled ? fill.colour().alpha() : 1, stroked ? stroke.colour().alpha() : 1);
+            if (filled) page.rg(fill.colour().red(), fill.colour().green(), fill.colour().blue());
+            if (stroked) {
+                page.w(stroke.width());
+                page.RG(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
+            }
+            path(page);
+            if (stroked && filled) even_odd ? page.BStar() : page.B();
+            else if (filled) even_odd ? page.fStar() : page.f();
+            else page.S();
+            page.Q();
         }
 
         void add_page() {
@@ -118,18 +133,32 @@ namespace sc {
             // open then, or those objects land inside it.
             pause();
             bool written = true;
-            for (auto &[page, content, links]: pages) {
-                written = writer.EndPageContentContext(content) == PDFHummus::eSuccess && written;
-                for (const auto &[url, area]: links)
+            for (auto &state: pages) {
+                written = writer.EndPageContentContext(state.content) == PDFHummus::eSuccess && written;
+                for (const auto &[url, area]: state.links)
                     writer.AttachURLLinktoCurrentPage(url, PDFRectangle(area.left(), y(area.bottom()), area.right(), y(area.top())));
-                written = writer.WritePageAndRelease(page) == PDFHummus::eSuccess && written;
+                written = writer.WritePageAndRelease(state.page) == PDFHummus::eSuccess && written;
             }
             pages.clear();
+            auto &objects = writer.GetObjectsContext();
+            for (const auto &[alphas, id]: alpha_states) {
+                objects.StartNewIndirectObject(id);
+                DictionaryContext *state = objects.StartDictionary();
+                state->WriteKey("Type");
+                state->WriteNameValue("ExtGState");
+                state->WriteKey("ca"); // fills and text
+                state->WriteDoubleValue(alphas.first);
+                state->WriteKey("CA"); // strokes
+                state->WriteDoubleValue(alphas.second);
+                objects.EndDictionary(state);
+                objects.EndIndirectObject();
+            }
             if (writer.EndPDF() != PDFHummus::eSuccess || !written) throw std::runtime_error("sc::pdf: writing the file failed");
         }
     };
 
-    pdf::pdf(const std::filesystem::path &filename, const page_size size) : impl_(std::make_unique<impl>(filename, size)) {
+    pdf::pdf(const std::filesystem::path &filename, const page_size size, const orientation turned)
+        : impl_(std::make_unique<impl>(filename, size, turned)) {
     }
 
     pdf::~pdf() {
@@ -208,30 +237,29 @@ namespace sc {
     void pdf::paint_text(const text &sample, const sc::fill &fill) {
         auto &content = impl_->content();
         PDFUsedFont *used = impl_->fonts.get(sample.font);
+        content.q();
+        impl_->set_alpha(content, fill.colour().alpha(), 1);
         content.BT();
         content.rg(fill.colour().red(), fill.colour().green(), fill.colour().blue());
         content.Tf(used, sample.font.size);
         content.Td(sample.position.x(), impl_->y(sample.position.y()));
         content.Tj(sample.content);
         content.ET();
+        content.Q();
     }
 
     void pdf::paint_line(const line &shape, const sc::stroke &stroke) {
-        auto &content = impl_->content();
-        content.q();
-        content.w(stroke.width());
-        content.RG(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
-        content.m(shape.from().x(), impl_->y(shape.from().y()));
-        content.l(shape.to().x(), impl_->y(shape.to().y()));
-        content.S();
-        content.Q();
+        impl_->paint(stroke, sc::fill::none(), [&](PageContentContext &content) {
+            content.m(shape.from().x(), impl_->y(shape.from().y()));
+            content.l(shape.to().x(), impl_->y(shape.to().y()));
+        });
     }
 
     void pdf::paint_rounded_rect(const rounded_rect &shape, const sc::stroke &stroke, const sc::fill &fill) {
         const rect box = shape.rect();
         const double radius = shape.radius();
         const double left = box.left(), right = box.right(), bottom = impl_->y(box.bottom()), top = impl_->y(box.top());
-        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) {
+        impl_->paint(stroke, fill, [&](PageContentContext &content) {
             const double control = radius * (1 - quarter_circle); // from the corner
             content.m(left + radius, bottom);
             content.l(right - radius, bottom);
@@ -248,8 +276,8 @@ namespace sc {
 
     void pdf::paint_circle(const circle &shape, const sc::stroke &stroke, const sc::fill &fill) {
         const double x = shape.center().x(), y = impl_->y(shape.center().y()), r = shape.radius();
-        const double k = r * quarter_circle; // control point distance from the end points
-        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) {
+        const double k = r * quarter_circle; // control point distance from the end points (sc-core's path.h)
+        impl_->paint(stroke, fill, [&](PageContentContext &content) {
             content.m(x + r, y);
             content.c(x + r, y + k, x + k, y + r, x, y + r);
             content.c(x - k, y + r, x - r, y + k, x - r, y);
@@ -260,7 +288,7 @@ namespace sc {
     }
 
     void pdf::paint_polygon(const polygon &shape, const sc::stroke &stroke, const sc::fill &fill) {
-        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) {
+        impl_->paint(stroke, fill, [&](PageContentContext &content) {
             content.m(shape[0].x(), impl_->y(shape[0].y()));
             for (std::size_t i = 1; i < shape.size(); ++i) content.l(shape[i].x(), impl_->y(shape[i].y()));
             content.h();
@@ -301,7 +329,7 @@ namespace sc {
     }
 
     void pdf::paint_path(const path &shape, const sc::stroke &stroke, const sc::fill &fill) {
-        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) { trace(content, shape, impl_->height); });
+        impl_->paint(stroke, fill, [&](PageContentContext &content) { trace(content, shape, impl_->height); });
     }
 
     void pdf::push_clip(const path &shape) {

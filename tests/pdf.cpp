@@ -21,8 +21,8 @@ namespace {
 
     bool contains(const std::string &text, const std::string &part) { return text.find(part) != std::string::npos; }
 
-    // Whether an object was written into the middle of another's stream (as close() once did to the
-    // current page when it wrote the fonts of an earlier one).
+    // Whether an object was written into the middle of another's stream (an earlier page's fonts
+    // landing inside the current page's content, say).
     bool objects_inside_streams(const std::string &file) {
         for (auto start = file.find("stream\r\n"); start != std::string::npos; start = file.find("stream\r\n", start + 1)) {
             if (start >= 3 && file.compare(start - 3, 3, "end") == 0) continue;
@@ -119,6 +119,31 @@ int main() {
         sc::pdf a5{directory / "a5.pdf", sc::page_size::a5};
         CHECK_EQ(a5.page_width(), 420.0);
         CHECK_EQ(a5.page_height(), 595.0);
+        sc::pdf wide{directory / "a3-landscape.pdf", sc::page_size::a3, sc::orientation::landscape};
+        CHECK_EQ(wide.page_width(), 1191.0);
+        CHECK_EQ(wide.page_height(), 842.0);
+    }
+
+    SECTION("Transparency: a colour's alpha");
+    {
+        const auto path = directory / "alpha.pdf";
+        {
+            sc::pdf pdf{path};
+            pdf.draw(sc::circle{{100, 100}, 20}, sc::stroke::none(), sc::color{0, 0, 0, 0.5});
+            pdf.draw(sc::circle{{150, 100}, 20}, sc::stroke::none(), sc::color{0, 0, 0, 0.5}); // the same state again
+            pdf.draw(sc::rect{50, 150, 100, 50}, sc::stroke{sc::color{1, 0, 0, 0.75}, 2});
+            pdf.draw(sc::text{"faint", {50, 250}}, sc::color{0, 0, 1, 0.25});
+            pdf.draw(sc::rect{50, 300, 100, 50}); // opaque: no state
+        }
+        const auto file = read(path);
+        CHECK(contains(file, "/ExtGState"));
+        CHECK(contains(file, "/ca 0.5"));
+        CHECK(contains(file, "/CA 0.75"));
+        CHECK(contains(file, "/ca 0.25"));
+        std::size_t states = 0;
+        for (auto at = file.find("/Type /ExtGState"); at != std::string::npos; at = file.find("/Type /ExtGState", at + 1)) ++states;
+        CHECK_EQ(states, std::size_t{3});
+        CHECK(!objects_inside_streams(file));
     }
 
     SECTION("Text measurements");

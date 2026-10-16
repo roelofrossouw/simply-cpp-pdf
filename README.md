@@ -1,6 +1,6 @@
 # simply-cpp-pdf
 
-C++20 PDF writer: pages of text, lines, rectangles, images, SVG drawings and
+C++20 PDF writer: pages of text, shapes, paths, images, SVG drawings and
 links, on [PDFHummus](https://github.com/galkahana/PDF-Writer).
 
 ## Licence, and the other engine
@@ -23,16 +23,22 @@ An `sc::pdf` is an `sc::canvas` from
 [sc-graphics](https://github.com/roelofrossouw/simply-cpp-graphics): shapes,
 text, paths and SVG are drawn with the same `draw()` calls as on an
 `sc::image`. Positions are in points (1/72 inch) from the page's top-left
-corner, x to the right and y down, as on a screen; colours are `sc::color`s.
-Fonts are found through fontconfig by family, weight and slant, and embedded
-(subset) in the file. Circles, rounded corners, curves and SVG stay vector
-graphics, and SVG clip paths clip. PDFHummus and fontconfig stay out of the
-headers.
+corner, x to the right and y down, as on a screen; colours are `sc::color`s,
+and a colour's alpha is honoured (fills, strokes and text). Fonts are found
+through fontconfig by family, weight and slant, and embedded (subset) in the
+file. Circles, rounded corners, curves and SVG stay vector graphics, and SVG
+clip paths clip. PDFHummus and fontconfig stay out of the headers.
+
+Pages are `sc::page_size::a3`, `a4` (the default), `a5`, `letter` or `legal`,
+portrait or `sc::orientation::landscape` (both from sc-graphics' `page.h`,
+shared with sc-mupdf); `sc::page_size_from("a3")` reads a name, as from a
+command line.
 
 ```cpp
 #include <pdf.h>
 
-sc::pdf pdf{"letter.pdf"};                                   // A4; sc::page_size::letter etc.
+sc::pdf pdf{"letter.pdf"};                                   // A4 portrait
+// sc::pdf wide{"wide.pdf", sc::page_size::a3, sc::orientation::landscape};   // 1191 x 842 points
 pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
 const sc::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
 pdf.draw(body);
@@ -40,6 +46,7 @@ const double width = pdf.text_width(body);                   // in its own font
 pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::stroke{sc::color::Black, 0.5});
 pdf.draw(sc::rect{50, 130, 200, 80}, sc::color::Black);       // outline: stroke colour
 pdf.draw(sc::rounded_rect{sc::rect{300, 130, 200, 80}, 8}, sc::color::Black, sc::color{0.9, 0.95, 1}); // + fill
+pdf.draw(sc::circle{{400, 300}, 30}, sc::stroke::none(), sc::color{0, 0, 0, 0.5}); // half opaque
 pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG, PNG or TIFF, fitted
 pdf.draw(sc::svg::load("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
 pdf.add_link("https://example.com", {50, 30, 120, 25});
@@ -58,14 +65,25 @@ stroke colours: icons and logos, not gradients, text or filters.
 
 ## Demo
 
-`sc-pdf-demo` writes a one-page PDF (a heading, text measured to centre it,
-lines, rounded rectangles, an SVG drawing and a link), showing each call. It
-is installed with the runtime package (`simply-cpp-pdf`):
+`sc-pdf-demo` writes a PDF (a heading, text measured to centre it, lines,
+shapes, SVG drawings with transforms, an even-odd hole and a clip path, a
+link, and a face path placed in the bottom-right corner by its `bounds()`,
+with half- and three-quarter-opaque eyes), showing each call. It is installed
+with the runtime package (`simply-cpp-pdf`):
+
+```text
+sc-pdf-demo [--size a4|a3|letter|legal] [--landscape] [--svg FILE] [OUTPUT]
+```
 
 ```bash
-sc-pdf-demo                 # writes sc-pdf-demo.pdf in the temporary directory
-sc-pdf-demo letter.pdf
+sc-pdf-demo                              # A4, sc-pdf-demo.pdf in the temporary directory
+sc-pdf-demo --size letter --landscape wide.pdf
+sc-pdf-demo --svg logo.svg               # adds a page with logo.svg fitted to it
+sc-pdf-demo --help
 ```
+
+A page too short for the SVG frames (Letter, or landscape) puts them on a
+second page.
 
 Its source is `examples/sc-pdf-demo.cpp`; the code below is copied from it at
 configure time, so it always matches code that compiles:
@@ -73,9 +91,9 @@ configure time, so it always matches code that compiles:
 <!-- sc-example: examples/sc-pdf-demo.cpp -->
 ```cpp
 sc::console::heading("Starting the file");
-sc::pdf pdf{output};
-sc::console::step("sc::pdf pdf{output};   // " + output.string());
-SC_SHOW(pdf.page_width());  // points, 1/72 inch: A4 by default
+sc::pdf pdf{output, paper, turned};
+sc::console::step("sc::pdf pdf{output, paper, turned};   // " + output.string());
+SC_SHOW(pdf.page_width());  // points, 1/72 inch: --size and --landscape
 SC_SHOW(pdf.page_height());
 
 sc::console::heading("Text: sc::text{content, where its baseline starts, sc::font}");
@@ -87,7 +105,7 @@ centred.position.x((pdf.page_width() - pdf.text_width(centred)) / 2);
 SC_STEP(pdf.draw(centred, sc::color{0.2, 0.2, 0.6}));
 
 sc::console::heading("Lines and shapes: draw(geometry, stroke, fill)");
-SC_STEP(pdf.draw(sc::line{{50, 165}, {545, 165}}, sc::stroke{sc::color::Black, 0.5}));
+SC_STEP(pdf.draw(sc::line{{50, 165}, {pdf.page_width() - 50, 165}}, sc::stroke{sc::color::Black, 0.5}));
 const sc::rect box{50, 190, 230, 120};
 SC_STEP(pdf.draw(sc::rounded_rect{box, 12}, sc::stroke{sc::color{0.16, 0.44, 0.59}, 2}, sc::color{0.85, 0.93, 0.98})); // stroke, fill
 SC_STEP(pdf.draw(sc::text{"A rounded box", {70, 255}, {"sans-serif", 16}}));
@@ -102,6 +120,10 @@ const std::string svg = R"(<svg xmlns="http://www.w3.org/2000/svg" width="320" h
                         R"(<path d="M120 130 Q160 170 200 130" stroke="#2a6f97" stroke-width="8" fill="none"/></svg>)";
 SC_STEP(pdf.draw(sc::svg{svg}, sc::rect{315, 190, 230, 120})); // sc-graphics reads it into paths
 
+sc::console::heading("A link");
+SC_STEP(pdf.draw(sc::text{"github.com/roelofrossouw/simply-cpp", {50, 490}}, sc::color::Blue));
+SC_STEP(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 476, 220, 18}));
+
 sc::console::heading("More SVG: transforms, arcs with an even-odd hole, a clip path");
 const sc::svg star{R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">)svg"
                    R"svg(<g transform="rotate(15 50 50)"><polygon fill="#e76f51" stroke="#264653" stroke-width="3")svg"
@@ -113,19 +135,35 @@ const sc::svg disc{R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100" hei
                    R"svg(<defs><clipPath id="round"><circle cx="50" cy="50" r="45"/></clipPath></defs>)svg"
                    R"svg(<rect clip-path="url(#round)" width="100" height="50" fill="#e9c46a"/>)svg"
                    R"svg(<rect clip-path="url(#round)" y="50" width="100" height="50" fill="#264653"/></svg>)svg"};
-double left_edge = 50;
+double top = 530, left_edge = 50;
+if (top + 300 > pdf.page_height()) { // no room on a shorter page (Letter, landscape): the frames go on the next
+    SC_STEP(pdf.new_page());
+    top = 50;
+}
 for (const auto &[drawing, caption]: {std::pair{&star, "rotate(15)"}, std::pair{&ring, "evenodd"}, std::pair{&disc, "clip-path"}}) {
-    const sc::rect frame{left_edge, 530, 150, 150};
+    const sc::rect frame{left_edge, top, 150, 150};
     pdf.draw(frame, sc::stroke{sc::color{0.8, 0.8, 0.8}, 0.5});
     pdf.draw(*drawing, frame - 10); // 10 points inside the frame
-    pdf.draw(sc::text{caption, {left_edge, 698}, {"monospace", 10}});
+    pdf.draw(sc::text{caption, {left_edge, top + 168}, {"monospace", 10}});
     left_edge += 172.5;
 }
 sc::console::step("pdf.draw(star / ring / disc, frame - 10);   // three 150-point frames");
 
-sc::console::heading("A link and finishing the file");
-SC_STEP(pdf.draw(sc::text{"github.com/roelofrossouw/simply-cpp", {50, 490}}, sc::color::Blue));
-SC_STEP(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 476, 220, 18}));
+sc::console::heading("A path in the bottom-right corner, placed by its bounds()");
+// A face drawn round (0, 0), with a curl of hair whose control points reach higher than the
+// curve does.
+auto face = to_path(sc::circle{{0, 0}, 40});
+face.move_to({-22, 12}).cubic_to({-10, 28}, {10, 28}, {22, 12});  // the smile
+face.move_to({-8, -40}).cubic_to({-8, -60}, {8, -60}, {8, -40});  // the curl
+SC_SHOW(face.bounds()); // exact: the curl's top is at -55, not its control points' -60
+const sc::point corner{pdf.page_width() - 30, pdf.page_height() - 30};  // 30 points in from the corner
+const sc::point offset = corner - face.bounds().right_bottom();         // moves the bounds' corner there
+SC_STEP(pdf.draw(face.transformed(1, 1, offset), sc::stroke{sc::color::Black, 2}));
+// Transparency is the colour's alpha: one eye half opaque, the other three-quarters.
+SC_STEP(pdf.draw(sc::circle{offset + sc::point{-14, -10}, 6}, sc::stroke::none(), sc::color{0.15, 0.27, 0.33, 0.5}));
+SC_STEP(pdf.draw(sc::circle{offset + sc::point{14, -10}, 6}, sc::stroke::none(), sc::color{0.15, 0.27, 0.33, 0.75}));
+
+sc::console::heading("Finishing the file");
 if (!svg_file.empty()) {
     SC_STEP(pdf.new_page());
     const auto drawing = sc::svg::load(svg_file);
@@ -143,9 +181,10 @@ SC_SHOW(std::filesystem::file_size(output)); // bytes
 
 PDFHummus isn't packaged by Ubuntu or Homebrew, so
 [simply-cpp-pdfhummus](https://github.com/roelofrossouw/simply-cpp-pdfhummus)
-builds it from source for both. sc-graphics brings the canvas and SVG reading
-(on tinyxml2); fontconfig (finding fonts) comes from the system. A machine running a program needs some fonts
-installed; Ubuntu's fontconfig brings DejaVu.
+builds it from source for both. sc-graphics brings the canvas, page sizes and
+SVG reading (on tinyxml2); fontconfig (finding fonts) comes from the system. A
+machine running a program needs some fonts installed; Ubuntu's fontconfig
+brings DejaVu.
 
 ## Building locally
 
