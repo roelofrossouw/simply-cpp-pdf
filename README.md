@@ -3,6 +3,20 @@
 C++20 PDF writer: pages of text, lines, rectangles, images, SVG drawings and
 links, on [PDFHummus](https://github.com/galkahana/PDF-Writer).
 
+## Licence, and the other engine
+
+**sc-pdf is Apache-2.0**, a permissive licence, as PDFHummus is: use it in
+programs under any licence, closed-source and commercial included.
+
+[sc-mupdf](https://github.com/roelofrossouw/simply-cpp-mupdf) writes PDFs
+with the same calls on [MuPDF](https://mupdf.com/), and can do more: read
+PDFs (and XPS, EPUB, CBZ), extract their text with positions and fonts, and
+render pages to images. But it's **AGPL-3.0**, a stricter licence that brings
+the AGPL to any program linking it. Both are an `sc::canvas`, so an app can
+switch engines by changing one class name and pick the licence it lives
+under: see the wiki's [PDF engines](https://github.com/roelofrossouw/simply-cpp/wiki/PDF-Engines)
+page.
+
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/PDF) and the [sc-pdf reference](https://github.com/roelofrossouw/simply-cpp/wiki/Reference-sc-pdf), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
 
 An `sc::pdf` is an `sc::canvas` from
