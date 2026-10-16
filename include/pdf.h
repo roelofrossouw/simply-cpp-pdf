@@ -66,15 +66,16 @@ namespace sc {
         void add_link(const std::string &url, const rect &pos);
 
     protected:
-        // Self-intersecting polygons fill by the nonzero winding rule. Text throws
-        // std::runtime_error when no font is found.
-        void paint_polygon(const polygon &shape, const color &stroke, const color &fill, double width) override;
+        // Strokes are a colour and a width, fills a colour and a fill rule (even-odd or nonzero), all
+        // opaque; other stroke and fill styles aren't drawn yet. Text throws std::runtime_error when
+        // no font is found.
+        void paint_polygon(const polygon &shape, const sc::stroke &stroke, const sc::fill &fill) override;
 
-        void paint_circle(const circle &shape, const color &stroke, const color &fill, double width) override;
+        void paint_circle(const circle &shape, const sc::stroke &stroke, const sc::fill &fill) override;
 
-        void paint_line(const point &from, const point &to, const color &colour, double width) override;
+        void paint_line(const line &shape, const sc::stroke &stroke) override;
 
-        void paint_text(const text &sample, const color &colour) override;
+        void paint_text(const text &sample, const sc::fill &fill) override;
 
         // In points, in the font fontconfig finds (std::runtime_error when there's none). x and cap
         // heights are what the font declares, or else the letter's own height.
@@ -85,10 +86,10 @@ namespace sc {
         double measure_cap_height(const font &font) override;
 
         // Real quarter circles, not the polygon a canvas draws by default.
-        void paint_rounded_rect(const rect &shape, double radius, const color &stroke, const color &fill, double width) override;
+        void paint_rounded_rect(const rounded_rect &shape, const sc::stroke &stroke, const sc::fill &fill) override;
 
         // Real curves; and clipping (so SVG clip paths work).
-        void paint_path(const path &shape, const color &stroke, const color &fill, double width) override;
+        void paint_path(const path &shape, const sc::stroke &stroke, const sc::fill &fill) override;
 
         void push_clip(const path &shape) override;
 

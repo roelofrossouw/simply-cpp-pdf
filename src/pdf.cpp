@@ -39,20 +39,21 @@ namespace sc {
             return static_cast<double>(face->glyph->metrics.horiBearingY) * size / face->units_per_EM;
         }
 
-        // Paints the path that path() writes: filled with fill and outlined with stroke, width wide,
-        // leaving out whichever of the two is transparent. Shared by every shape.
+        // Paints the path that path() writes: filled by fill (by its rule) and outlined by stroke,
+        // leaving out whichever of the two is none. Shared by every shape. Colours are opaque.
         template<typename Path>
-        void fill_and_stroke(PageContentContext &content, const color &stroke, const color &fill, const double width, Path path) {
-            const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
+        void fill_and_stroke(PageContentContext &content, const sc::stroke &stroke, const sc::fill &fill, Path path) {
+            const bool stroked = stroke.visible(), filled = fill.visible();
+            const bool even_odd = fill.rule() == fill_rule::even_odd;
             content.q();
-            if (filled) content.rg(fill.red(), fill.green(), fill.blue());
+            if (filled) content.rg(fill.colour().red(), fill.colour().green(), fill.colour().blue());
             if (stroked) {
-                content.w(width);
-                content.RG(stroke.red(), stroke.green(), stroke.blue());
+                content.w(stroke.width());
+                content.RG(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
             }
             path(content);
-            if (stroked && filled) content.B();
-            else if (filled) content.f();
+            if (stroked && filled) even_odd ? content.BStar() : content.B();
+            else if (filled) even_odd ? content.fStar() : content.f();
             else content.S();
             content.Q();
         }
@@ -206,31 +207,33 @@ namespace sc {
         return glyph_height(used, used->GetFreeTypeFont()->GetCapHeight(), 'H', font.size);
     }
 
-    void pdf::paint_text(const text &sample, const color &colour) {
+    void pdf::paint_text(const text &sample, const sc::fill &fill) {
         auto &content = impl_->content();
         PDFUsedFont *used = impl_->fonts.get(sample.font);
         content.BT();
-        content.rg(colour.red(), colour.green(), colour.blue());
+        content.rg(fill.colour().red(), fill.colour().green(), fill.colour().blue());
         content.Tf(used, sample.font.size);
         content.Td(sample.position.x(), impl_->y(sample.position.y()));
         content.Tj(sample.content);
         content.ET();
     }
 
-    void pdf::paint_line(const point &from, const point &to, const color &colour, const double width) {
+    void pdf::paint_line(const line &shape, const sc::stroke &stroke) {
         auto &content = impl_->content();
         content.q();
-        content.w(width);
-        content.RG(colour.red(), colour.green(), colour.blue());
-        content.m(from.x(), impl_->y(from.y()));
-        content.l(to.x(), impl_->y(to.y()));
+        content.w(stroke.width());
+        content.RG(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
+        content.m(shape.from().x(), impl_->y(shape.from().y()));
+        content.l(shape.to().x(), impl_->y(shape.to().y()));
         content.S();
         content.Q();
     }
 
-    void pdf::paint_rounded_rect(const rect &shape, const double radius, const color &stroke, const color &fill, const double width) {
-        const double left = shape.left(), right = shape.right(), bottom = impl_->y(shape.bottom()), top = impl_->y(shape.top());
-        fill_and_stroke(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+    void pdf::paint_rounded_rect(const rounded_rect &shape, const sc::stroke &stroke, const sc::fill &fill) {
+        const rect box = shape.rect();
+        const double radius = shape.radius();
+        const double left = box.left(), right = box.right(), bottom = impl_->y(box.bottom()), top = impl_->y(box.top());
+        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) {
             const double control = radius * (1 - quarter_circle); // from the corner
             content.m(left + radius, bottom);
             content.l(right - radius, bottom);
@@ -245,10 +248,10 @@ namespace sc {
         });
     }
 
-    void pdf::paint_circle(const circle &shape, const color &stroke, const color &fill, const double width) {
+    void pdf::paint_circle(const circle &shape, const sc::stroke &stroke, const sc::fill &fill) {
         const double x = shape.center().x(), y = impl_->y(shape.center().y()), r = shape.radius();
         const double k = r * quarter_circle; // control point distance from the end points
-        fill_and_stroke(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) {
             content.m(x + r, y);
             content.c(x + r, y + k, x + k, y + r, x, y + r);
             content.c(x - k, y + r, x - r, y + k, x - r, y);
@@ -258,8 +261,8 @@ namespace sc {
         });
     }
 
-    void pdf::paint_polygon(const polygon &shape, const color &stroke, const color &fill, const double width) {
-        fill_and_stroke(impl_->content(), stroke, fill, width, [&](PageContentContext &content) {
+    void pdf::paint_polygon(const polygon &shape, const sc::stroke &stroke, const sc::fill &fill) {
+        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) {
             content.m(shape[0].x(), impl_->y(shape[0].y()));
             for (std::size_t i = 1; i < shape.size(); ++i) content.l(shape[i].x(), impl_->y(shape[i].y()));
             content.h();
@@ -299,27 +302,15 @@ namespace sc {
         }
     }
 
-    void pdf::paint_path(const path &shape, const color &stroke, const color &fill, const double width) {
-        auto &content = impl_->content();
-        const bool stroked = stroke.alpha() > 0 && width > 0, filled = fill.alpha() > 0;
-        content.q();
-        if (filled) content.rg(fill.red(), fill.green(), fill.blue());
-        if (stroked) {
-            content.w(width);
-            content.RG(stroke.red(), stroke.green(), stroke.blue());
-        }
-        trace(content, shape, impl_->height);
-        if (stroked && filled) shape.even_odd ? content.BStar() : content.B();
-        else if (filled) shape.even_odd ? content.fStar() : content.f();
-        else content.S();
-        content.Q();
+    void pdf::paint_path(const path &shape, const sc::stroke &stroke, const sc::fill &fill) {
+        fill_and_stroke(impl_->content(), stroke, fill, [&](PageContentContext &content) { trace(content, shape, impl_->height); });
     }
 
     void pdf::push_clip(const path &shape) {
         auto &content = impl_->content();
         content.q();
         trace(content, shape, impl_->height);
-        shape.even_odd ? content.WStar() : content.W();
+        content.W(); // nonzero, as canvas::push_clip() clips
         content.n();
     }
 
