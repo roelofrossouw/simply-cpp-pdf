@@ -54,13 +54,13 @@ int main() {
             CHECK_NOTHROW(pdf.draw(sc::text{"Bold and blue", {50, 110}, sc::font::bold("sans-serif", 14)}, sc::color{0, 0, 1}));
             CHECK_NOTHROW(pdf.draw(sc::line{{50, 120}, {545, 120}}, sc::stroke{sc::color::Black, 0.5}));
             CHECK_NOTHROW(pdf.draw(sc::rounded_rect{sc::rect{50, 140, 200, 100}, 12}, sc::stroke{sc::color::Red, 2}));
-            CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::stroke::none(), sc::color{0.6, 0.95, 0.4}));
-            CHECK_NOTHROW(pdf.draw(sc::rounded_rect{sc::rect{300, 140, 200, 100}, 6}, sc::color::Black, sc::color::White));
-            CHECK_NOTHROW(pdf.draw(sc::circle{{400, 600}, 40}, sc::stroke{sc::color::Black, 2}, sc::color{1, 0.8, 0.2}));
+            CHECK_NOTHROW(pdf.draw(sc::rect{300, 140, 200, 100}, sc::appearance::filled(sc::color{0.6, 0.95, 0.4})));
+            CHECK_NOTHROW(pdf.draw(sc::rounded_rect{sc::rect{300, 140, 200, 100}, 6}, {sc::color::Black, sc::color::White}));
+            CHECK_NOTHROW(pdf.draw(sc::circle{{400, 600}, 40}, {sc::stroke{sc::color::Black, 2}, sc::color{1, 0.8, 0.2}}));
             CHECK_NOTHROW(pdf.draw(sc::polygon{{300, 700}, {360, 640}, {420, 700}}, sc::color::Blue));
             CHECK_NOTHROW(pdf.draw(sc::polygon{{300.5, 760.25}, {360.75, 700.5}, {420.25, 760.75}}, sc::color::Blue));
             CHECK_NOTHROW(pdf.draw(sc::polygon_i{{300, 800}, {360, 740}, {420, 800}}, sc::color::Black));
-            CHECK_NOTHROW(pdf.draw(sc::rotated_rect{{480, 600}, {60, 30}, 30}, sc::stroke::none(), sc::color::Green));
+            CHECK_NOTHROW(pdf.draw(sc::rotated_rect{{480, 600}, {60, 30}, 30}, sc::appearance::filled(sc::color::Green)));
             CHECK_NOTHROW(pdf.draw(sc::polygon{}, sc::color::Black)); // nothing to draw
             CHECK_NOTHROW(pdf.draw(sc::circle{{0, 0}, 0}, sc::color::Black));
             CHECK_NOTHROW(pdf.draw_image("resource/image.png", {50, 260, 240, 160}));
@@ -129,8 +129,8 @@ int main() {
         const auto path = directory / "alpha.pdf";
         {
             sc::pdf pdf{path};
-            pdf.draw(sc::circle{{100, 100}, 20}, sc::stroke::none(), sc::color{0, 0, 0, 0.5});
-            pdf.draw(sc::circle{{150, 100}, 20}, sc::stroke::none(), sc::color{0, 0, 0, 0.5}); // the same state again
+            pdf.draw(sc::circle{{100, 100}, 20}, sc::appearance::filled(sc::color{0, 0, 0, 0.5}));
+            pdf.draw(sc::circle{{150, 100}, 20}, sc::appearance::filled(sc::color{0, 0, 0, 0.5})); // the same state again
             pdf.draw(sc::rect{50, 150, 100, 50}, sc::stroke{sc::color{1, 0, 0, 0.75}, 2});
             pdf.draw(sc::text{"faint", {50, 250}}, sc::color{0, 0, 1, 0.25});
             pdf.draw(sc::rect{50, 300, 100, 50}); // opaque: no state
