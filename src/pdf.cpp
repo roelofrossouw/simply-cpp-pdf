@@ -39,7 +39,7 @@ namespace sc {
             PageContentContext *content;
             // PDFHummus attaches links to the next page it writes, so they wait here until then.
             std::vector<std::pair<std::string, rect> > links;
-            // The transparency states the page uses, by their names in its resources.
+            // The ExtGStates the page uses, by their names in its resources.
             std::map<ObjectIDType, std::string> alpha_names;
         };
 
@@ -91,8 +91,7 @@ namespace sc {
             content.gs(name->second);
         }
 
-        // Paints what path() writes: filled (by fill's rule) and/or stroked, leaving out whichever
-        // is none. Shared by every shape.
+        // Fills (by the fill's rule) and/or strokes what path() writes; whichever is none is left out.
         template<typename Path>
         void paint(const sc::appearance &look, Path path) {
             const auto &stroke = look.stroke();

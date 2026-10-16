@@ -22,12 +22,12 @@ page.
 An `sc::pdf` is an `sc::canvas` from
 [sc-graphics](https://github.com/roelofrossouw/simply-cpp-graphics): shapes,
 text, paths and SVG are drawn with the same `draw()` calls as on an
-`sc::image`. Positions are in points (1/72 inch) from the page's top-left
-corner, x to the right and y down, as on a screen; colours are `sc::color`s,
-and a colour's alpha is honoured (fills, strokes and text). Fonts are found
-through fontconfig by family, weight and slant, and embedded (subset) in the
-file. Circles, rounded corners, curves and SVG stay vector graphics, and SVG
-clip paths clip. PDFHummus and fontconfig stay out of the headers.
+`sc::image`, each shape with an `sc::appearance` (stroke and fill).
+Positions are in points (1/72 inch) from the page's top-left corner, y down,
+as on a screen. A colour's alpha is honoured for fills, strokes and text.
+Fonts are found through fontconfig and embedded (subset). Curves and SVG stay
+vector graphics, and SVG clip paths clip. PDFHummus and fontconfig stay out
+of the headers.
 
 Pages are `sc::page_size::a3`, `a4` (the default), `a5`, `letter` or `legal`,
 portrait or `sc::orientation::landscape` (both from sc-graphics' `page.h`,
@@ -37,7 +37,7 @@ command line.
 ```cpp
 #include <pdf.h>
 
-sc::pdf pdf{"letter.pdf"};                                   // A4 portrait
+sc::pdf pdf{"hello.pdf"};                                    // A4 portrait
 // sc::pdf wide{"wide.pdf", sc::page_size::a3, sc::orientation::landscape};   // 1191 x 842 points
 pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
 const sc::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
@@ -66,11 +66,12 @@ filters). `pdf.draw(drawing, box)` fits one into a box.
 
 ## Demo
 
-`sc-pdf-demo` writes a PDF (a heading, text measured to centre it, lines,
-shapes, SVG drawings with transforms, an even-odd hole and a clip path, a
-half-transparent circle over the top boxes, a link, and a race track path
-placed in the bottom-right corner by its exact `bounds()`), showing each call. It is installed
-with the runtime package (`simply-cpp-pdf`):
+`sc-pdf-demo` writes a PDF, showing each call: text measured to centre it,
+shapes, SVG drawings (transforms, an even-odd hole, a clip path), a
+half-transparent circle over the top boxes, a link, and a race track placed
+in the bottom-right corner by its exact `bounds()`. sc-mupdf's
+`sc-mupdf-write` draws the same page with MuPDF. It is installed with the
+runtime package (`simply-cpp-pdf`):
 
 ```text
 sc-pdf-demo [--size a4|a3|letter|legal] [--landscape] [--svg FILE] [OUTPUT]
@@ -84,9 +85,7 @@ sc-pdf-demo --help
 ```
 
 A page too short for the SVG frames (Letter, or landscape) puts them on a
-second page.
-
-Its source is `examples/sc-pdf-demo.cpp`; the code below is copied from it at
+second page. The code below is copied from `examples/sc-pdf-demo.cpp` at
 configure time, so it always matches code that compiles:
 
 <!-- sc-example: examples/sc-pdf-demo.cpp -->
@@ -119,10 +118,10 @@ const std::string svg = R"(<svg xmlns="http://www.w3.org/2000/svg" width="320" h
                         R"(<rect width="320" height="200" rx="16" fill="#2a6f97"/>)"
                         R"(<circle cx="160" cy="100" r="70" fill="#f4d35e"/>)"
                         R"(<path d="M120 130 Q160 170 200 130" stroke="#2a6f97" stroke-width="8" fill="none"/></svg>)";
-SC_STEP(pdf.draw(sc::drawing::from_svg(svg), sc::rect{315, 190, 230, 120})); // sc-graphics reads it into a drawing
+SC_STEP(pdf.draw(sc::drawing::from_svg(svg), sc::rect{315, 190, 230, 120}));
 
 sc::console::heading("Transparency: a colour's alpha");
-// Over the two boxes, so what's behind shows through: filled half opaque, outlined three-quarters.
+// Over both boxes: filled half opaque, outlined three-quarters.
 SC_STEP(pdf.draw(sc::circle{{297.5, 250}, 75}, {sc::stroke{sc::color{0.75, 0.1, 0.1, 0.75}, 3}, sc::color{0.9, 0.2, 0.2, 0.5}}));
 
 sc::console::heading("A link");
@@ -176,11 +175,11 @@ track.move_to({20, 70})
     .cubic_to({35.8, 93.8}, {30, 92.2}, {25, 88})       // Tiergarten
     .cubic_to({20, 83.8}, {19.2, 77.2}, {20, 70})
     .close();
-SC_SHOW(track.bounds()); // the track's own extremes
-const sc::point corner{pdf.page_width() - 8, pdf.page_height() - 8}; // 8 points in from the corner
+SC_SHOW(track.bounds());
+const sc::point corner{pdf.page_width() - 8, pdf.page_height() - 8};
 track = sc::transform::translate(corner - track.bounds().right_bottom()).apply(track);
 SC_STEP(pdf.draw(track.bounds(), sc::stroke{sc::color{0.6, 0.6, 0.6}, 0.5})); // its bounds: the line's centre touches it all round
-SC_STEP(pdf.draw(track, sc::stroke{sc::color::Black, 4}));                    // no fill
+SC_STEP(pdf.draw(track, sc::stroke{sc::color::Black, 4}));
 
 sc::console::heading("Finishing the file");
 if (!svg_file.empty()) {

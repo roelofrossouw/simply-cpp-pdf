@@ -13,18 +13,15 @@
 #include <string_view>
 
 namespace sc {
-    // Writes a PDF file on PDFHummus: pages of text, shapes, images, SVG drawings
-    // (canvas::draw(sc::drawing, rect)) and links.
-    //
-    // An sc::canvas, drawn and measured with the same calls as an sc::image. Positions are in points
-    // (1/72 inch) from the page's top-left corner, y down (PDF counts y up; this converts). A
-    // colour's alpha is honoured. Fonts are found through fontconfig and embedded. Drawing goes to
-    // the current page: the newest, unless set_page() moved back. The file is finished by close(),
-    // or by the destructor, which can't report a failure.
+    // A PDF file written with PDFHummus: an sc::canvas, drawn and measured with the same calls as an
+    // sc::image, plus images and links. Positions are in points (1/72 inch) from the page's top-left
+    // corner, y down. A colour's alpha is honoured; fonts are found through fontconfig and embedded.
+    // Drawing goes to the current page: the newest, unless set_page() moved back. close() finishes
+    // the file, or else the destructor, which can't report a failure.
     class pdf : public canvas {
     public:
-        // Starts the file with one page; every page has this size (sc-graphics' page.h: A3, A4, A5,
-        // Letter, Legal) and orientation. Throws std::runtime_error when the file can't be created.
+        // Starts the file with one page; every page has this size and orientation (page.h). Throws
+        // std::runtime_error when the file can't be created.
         explicit pdf(const std::filesystem::path &filename, page_size size = page_size::a4, orientation turned = orientation::portrait);
 
         ~pdf() override;
