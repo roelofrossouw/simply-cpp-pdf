@@ -13,7 +13,6 @@ namespace sc {
     PDFUsedFont *font_collection::get(const font &spec) {
         const auto key = std::tuple{spec.family, spec.weight, spec.italic, spec.style};
         if (const auto found = fonts.find(key); found != fonts.end()) return found->second;
-        // sc-graphics' lookup (fontconfig), the same as every canvas's.
         const auto face = spec.face();
         if (!face) throw std::runtime_error("sc::pdf: fontconfig found no font for \"" + spec.family + "\"");
         const auto &file = face->file();

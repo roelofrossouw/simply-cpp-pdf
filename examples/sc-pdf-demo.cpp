@@ -1,8 +1,6 @@
-// Writes a PDF: a heading, text measured to centre it, lines, shapes, SVG drawings (curves,
-// transforms, an even-odd hole, a clip path), a half-transparent circle over the boxes, a link, and
-// a race track path placed in the bottom-right corner by its bounds(). Each line shows a call and what
-// it returned. --help lists the options: the output file, --size, --landscape, and --svg for a page
-// of its own.
+// Writes a PDF with PDFHummus: text, shapes, SVG drawings, a half-transparent circle over the
+// boxes, a link, and a race track placed in the bottom-right corner by its bounds(). Each line shows
+// a call and what it returned. sc-mupdf-write draws the same page with MuPDF.
 
 #include <filesystem>
 #include <iostream>
@@ -15,7 +13,7 @@
 #include <pdf.h>
 
 int main(int argc, char **argv) {
-    // The command line: -h/--help comes with sc::params, which also reports mistakes and exits.
+    // sc::params brings -h/--help, and reports mistakes and exits.
     const sc::params args{argc, argv, {
         {"name", "sc-pdf-demo"},
         {"description", "Writes a page of text, shapes, SVG drawings and a link with PDFHummus (sc-mupdf-write writes the same "
@@ -65,10 +63,10 @@ int main(int argc, char **argv) {
                                 R"(<rect width="320" height="200" rx="16" fill="#2a6f97"/>)"
                                 R"(<circle cx="160" cy="100" r="70" fill="#f4d35e"/>)"
                                 R"(<path d="M120 130 Q160 170 200 130" stroke="#2a6f97" stroke-width="8" fill="none"/></svg>)";
-        SC_STEP(pdf.draw(sc::drawing::from_svg(svg), sc::rect{315, 190, 230, 120})); // sc-graphics reads it into a drawing
+        SC_STEP(pdf.draw(sc::drawing::from_svg(svg), sc::rect{315, 190, 230, 120}));
 
         sc::console::heading("Transparency: a colour's alpha");
-        // Over the two boxes, so what's behind shows through: filled half opaque, outlined three-quarters.
+        // Over both boxes: filled half opaque, outlined three-quarters.
         SC_STEP(pdf.draw(sc::circle{{297.5, 250}, 75}, {sc::stroke{sc::color{0.75, 0.1, 0.1, 0.75}, 3}, sc::color{0.9, 0.2, 0.2, 0.5}}));
 
         sc::console::heading("A link");
@@ -122,11 +120,11 @@ int main(int argc, char **argv) {
             .cubic_to({35.8, 93.8}, {30, 92.2}, {25, 88})       // Tiergarten
             .cubic_to({20, 83.8}, {19.2, 77.2}, {20, 70})
             .close();
-        SC_SHOW(track.bounds()); // the track's own extremes
-        const sc::point corner{pdf.page_width() - 8, pdf.page_height() - 8}; // 8 points in from the corner
+        SC_SHOW(track.bounds());
+        const sc::point corner{pdf.page_width() - 8, pdf.page_height() - 8};
         track = sc::transform::translate(corner - track.bounds().right_bottom()).apply(track);
         SC_STEP(pdf.draw(track.bounds(), sc::stroke{sc::color{0.6, 0.6, 0.6}, 0.5})); // its bounds: the line's centre touches it all round
-        SC_STEP(pdf.draw(track, sc::stroke{sc::color::Black, 4}));                    // no fill
+        SC_STEP(pdf.draw(track, sc::stroke{sc::color::Black, 4}));
 
         sc::console::heading("Finishing the file");
         if (!svg_file.empty()) {
