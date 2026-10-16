@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 set(SC_MODULE pdf)
-project(simply-cpp-${SC_MODULE} LANGUAGES CXX)
+project(simply-cpp-${SC_MODULE} HOMEPAGE_URL "https://github.com/roelofrossouw/simply-cpp-pdf" LANGUAGES CXX)
 include(cmake/sc_bootstrap.cmake)
 
 option(SC_PDF_BUILD_TESTS "Build simply-cpp-pdf tests" ${PROJECT_IS_TOP_LEVEL})
@@ -8,7 +8,7 @@ option(SC_PDF_BUILD_TESTS "Build simply-cpp-pdf tests" ${PROJECT_IS_TOP_LEVEL})
 get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.6.1)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.7.0)
 # sc::canvas, which pdf implements, and sc::svg.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 1.0.1)
 # PDFHummus isn't in Ubuntu or Homebrew: sc-pdfhummus packages it for both.
@@ -54,5 +54,5 @@ add_sc_example(sc-pdf-demo)
 # looks for zlib, FreeType, libjpeg, libtiff, libpng and OpenSSL when a consumer configures.
 package_sc_module(
         DEPENDS simply-cpp-pdfhummus
-        DEV_DEPENDS "simply-cpp-dev (>= 1.6.1~)" "simply-cpp-graphics-dev (>= 1.0.1~)" simply-cpp-pdfhummus libfontconfig-dev
+        DEV_DEPENDS "simply-cpp-dev (>= 1.7.0~)" "simply-cpp-graphics-dev (>= 1.0.1~)" simply-cpp-pdfhummus libfontconfig-dev
         zlib1g-dev libfreetype-dev libjpeg-dev libtiff-dev libpng-dev libssl-dev)
