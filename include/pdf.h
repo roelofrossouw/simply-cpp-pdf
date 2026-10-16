@@ -67,9 +67,9 @@ namespace sc {
         // Strokes are a colour and a width, fills a colour and a fill rule (even-odd or nonzero);
         // alpha below 1 goes through a graphics state (ExtGState). Other stroke and fill styles
         // aren't drawn yet. Text throws std::runtime_error when no font is found.
-        void paint_polygon(const polygon &shape, const sc::stroke &stroke, const sc::fill &fill) override;
+        void paint_polygon(const polygon &shape, const sc::appearance &look) override;
 
-        void paint_circle(const circle &shape, const sc::stroke &stroke, const sc::fill &fill) override;
+        void paint_circle(const circle &shape, const sc::appearance &look) override;
 
         void paint_line(const line &shape, const sc::stroke &stroke) override;
 
@@ -84,10 +84,10 @@ namespace sc {
         double measure_cap_height(const font &font) override;
 
         // Real quarter circles, not the polygon a canvas draws by default.
-        void paint_rounded_rect(const rounded_rect &shape, const sc::stroke &stroke, const sc::fill &fill) override;
+        void paint_rounded_rect(const rounded_rect &shape, const sc::appearance &look) override;
 
         // Real curves; clips are nonzero, nest, and make SVG clip paths work.
-        void paint_path(const path &shape, const sc::stroke &stroke, const sc::fill &fill) override;
+        void paint_path(const path &shape, const sc::appearance &look) override;
 
         void push_clip(const path &shape) override;
 

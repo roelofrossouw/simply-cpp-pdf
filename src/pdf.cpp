@@ -94,7 +94,9 @@ namespace sc {
         // Paints what path() writes: filled (by fill's rule) and/or stroked, leaving out whichever
         // is none. Shared by every shape.
         template<typename Path>
-        void paint(const sc::stroke &stroke, const sc::fill &fill, Path path) {
+        void paint(const sc::appearance &look, Path path) {
+            const auto &stroke = look.stroke();
+            const auto &fill = look.fill();
             auto &page = content();
             const bool stroked = stroke.visible(), filled = fill.visible();
             const bool even_odd = fill.rule() == fill_rule::even_odd;
@@ -249,17 +251,17 @@ namespace sc {
     }
 
     void pdf::paint_line(const line &shape, const sc::stroke &stroke) {
-        impl_->paint(stroke, sc::fill::none(), [&](PageContentContext &content) {
+        impl_->paint(stroke, [&](PageContentContext &content) {
             content.m(shape.from().x(), impl_->y(shape.from().y()));
             content.l(shape.to().x(), impl_->y(shape.to().y()));
         });
     }
 
-    void pdf::paint_rounded_rect(const rounded_rect &shape, const sc::stroke &stroke, const sc::fill &fill) {
+    void pdf::paint_rounded_rect(const rounded_rect &shape, const sc::appearance &look) {
         const rect box = shape.rect();
         const double radius = shape.radius();
         const double left = box.left(), right = box.right(), bottom = impl_->y(box.bottom()), top = impl_->y(box.top());
-        impl_->paint(stroke, fill, [&](PageContentContext &content) {
+        impl_->paint(look, [&](PageContentContext &content) {
             const double control = radius * (1 - quarter_circle); // from the corner
             content.m(left + radius, bottom);
             content.l(right - radius, bottom);
@@ -274,10 +276,10 @@ namespace sc {
         });
     }
 
-    void pdf::paint_circle(const circle &shape, const sc::stroke &stroke, const sc::fill &fill) {
+    void pdf::paint_circle(const circle &shape, const sc::appearance &look) {
         const double x = shape.center().x(), y = impl_->y(shape.center().y()), r = shape.radius();
         const double k = r * quarter_circle; // control point distance from the end points (sc-core's path.h)
-        impl_->paint(stroke, fill, [&](PageContentContext &content) {
+        impl_->paint(look, [&](PageContentContext &content) {
             content.m(x + r, y);
             content.c(x + r, y + k, x + k, y + r, x, y + r);
             content.c(x - k, y + r, x - r, y + k, x - r, y);
@@ -287,8 +289,8 @@ namespace sc {
         });
     }
 
-    void pdf::paint_polygon(const polygon &shape, const sc::stroke &stroke, const sc::fill &fill) {
-        impl_->paint(stroke, fill, [&](PageContentContext &content) {
+    void pdf::paint_polygon(const polygon &shape, const sc::appearance &look) {
+        impl_->paint(look, [&](PageContentContext &content) {
             content.m(shape[0].x(), impl_->y(shape[0].y()));
             for (std::size_t i = 1; i < shape.size(); ++i) content.l(shape[i].x(), impl_->y(shape[i].y()));
             content.h();
@@ -328,8 +330,8 @@ namespace sc {
         }
     }
 
-    void pdf::paint_path(const path &shape, const sc::stroke &stroke, const sc::fill &fill) {
-        impl_->paint(stroke, fill, [&](PageContentContext &content) { trace(content, shape, impl_->height); });
+    void pdf::paint_path(const path &shape, const sc::appearance &look) {
+        impl_->paint(look, [&](PageContentContext &content) { trace(content, shape, impl_->height); });
     }
 
     void pdf::push_clip(const path &shape) {
