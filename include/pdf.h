@@ -14,7 +14,7 @@
 
 namespace sc {
     // Writes a PDF file on PDFHummus: pages of text, shapes, images, SVG drawings
-    // (canvas::draw(sc::svg, rect)) and links.
+    // (canvas::draw(sc::drawing, rect)) and links.
     //
     // An sc::canvas, drawn and measured with the same calls as an sc::image. Positions are in points
     // (1/72 inch) from the page's top-left corner, y down (PDF counts y up; this converts). A
