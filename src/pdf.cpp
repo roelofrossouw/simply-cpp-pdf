@@ -58,9 +58,7 @@ namespace sc {
             content.Q();
         }
 
-        // Control point distance for a quarter circle drawn as one cubic Bezier curve, as a fraction
-        // of its radius.
-        constexpr double quarter_circle = 0.5522847498;
+        // quarter_circle, the control point distance for a quarter circle, is sc-core's (path.h).
     }
 
     struct pdf::impl {
