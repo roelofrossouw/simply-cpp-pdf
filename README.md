@@ -104,7 +104,7 @@ SC_SHOW(pdf.text_width(centred));
 centred.position.x((pdf.page_width() - pdf.text_width(centred)) / 2);
 SC_STEP(pdf.draw(centred, sc::color{0.2, 0.2, 0.6}));
 
-sc::console::heading("Lines and shapes: draw(geometry, {stroke, fill})");
+sc::console::heading("Lines and shapes: draw(geometry, appearance)");
 SC_STEP(pdf.draw(sc::line{{50, 165}, {pdf.page_width() - 50, 165}}, sc::stroke{sc::color::Black, 0.5}));
 const sc::rect box{50, 190, 230, 120};
 SC_STEP(pdf.draw(sc::rounded_rect{box, 12}, {sc::stroke{sc::color{0.16, 0.44, 0.59}, 2}, sc::color{0.85, 0.93, 0.98}})); // stroke, fill
