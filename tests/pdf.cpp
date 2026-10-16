@@ -65,7 +65,7 @@ int main() {
             CHECK_NOTHROW(pdf.draw(sc::circle{{0, 0}, 0}, sc::color::Black));
             CHECK_NOTHROW(pdf.draw_image("resource/image.png", {50, 260, 240, 160}));
             CHECK_NOTHROW(pdf.draw_image("resource/image.jpg", {300, 260, 240, 160}));
-            CHECK_NOTHROW(pdf.draw(sc::svg{badge}, sc::rect{50, 440, 200, 100}));
+            CHECK_NOTHROW(pdf.draw(sc::drawing::from_svg(badge), sc::rect{50, 440, 200, 100}));
             CHECK_NOTHROW(pdf.add_link("https://github.com/roelofrossouw/simply-cpp", {50, 60, 150, 30}));
             pdf.close();
             CHECK_NOTHROW(pdf.close()); // twice does nothing
