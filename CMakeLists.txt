@@ -10,31 +10,21 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.7.0)
 # sc::canvas, which pdf implements, and sc::svg.
-find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 1.0.1)
+find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 1.1.0)
 # PDFHummus isn't in Ubuntu or Homebrew: sc-pdfhummus packages it for both.
 find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
-# Through pkg-config, linked by path as sc-redis does hiredis, so the exported targets don't need
-# pkg-config.
-config_or_install_package(fontconfig libfontconfig-dev fontconfig)
-foreach (library fontconfig)
-    string(TOUPPER "SC_PDF_${library}_LIBRARY" cached)
-    if (${cached} AND NOT EXISTS "${${cached}}")
-        message(STATUS "${library}: the cached library location is gone, looking again")
-        unset(${cached} CACHE)
-    endif ()
-    find_library(${cached} NAMES ${library} HINTS ${${library}_LIBRARY_DIRS} REQUIRED)
-endforeach ()
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-# Everything PDFHummus or fontconfig is in src/, out of the installed headers.
+# Everything PDFHummus is in src/, out of the installed headers. Fonts are found by sc-graphics'
+# sc::font_face.
 add_sc_object(pdf
         SOURCES src/font_collection.cpp src/font_collection.h
         INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src
-        LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter PkgConfig::fontconfig
-        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter ${SC_PDF_FONTCONFIG_LIBRARY})
+        LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter
+        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter)
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdf")
 
@@ -54,5 +44,5 @@ add_sc_example(sc-pdf-demo)
 # looks for zlib, FreeType, libjpeg, libtiff, libpng and OpenSSL when a consumer configures.
 package_sc_module(
         DEPENDS simply-cpp-pdfhummus
-        DEV_DEPENDS "simply-cpp-dev (>= 1.7.0~)" "simply-cpp-graphics-dev (>= 1.0.1~)" simply-cpp-pdfhummus libfontconfig-dev
+        DEV_DEPENDS "simply-cpp-dev (>= 1.7.0~)" "simply-cpp-graphics-dev (>= 1.1.0~)" simply-cpp-pdfhummus
         zlib1g-dev libfreetype-dev libjpeg-dev libtiff-dev libpng-dev libssl-dev)
