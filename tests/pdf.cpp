@@ -73,10 +73,10 @@ int main() {
             CHECK_THROWS_AS(pdf.draw(sc::text{"too late", {50, 600}}), std::logic_error);
         }
         const auto file = read(path);
-        CHECK(file.starts_with("%PDF-1.4"));
+        CHECK(file.starts_with("%PDF-1.7"));
         CHECK(contains(file, "%%EOF"));
         CHECK(contains(file, "/Count 1"));
-        CHECK(std::regex_search(file, std::regex{R"(/MediaBox \[ 0 0 595\.27\d* 841\.88\d* \])"}));
+        CHECK(std::regex_search(file, std::regex{R"(/MediaBox \[0 0 595\.27\d* 841\.8\d*\])"}));
         CHECK(contains(file, "/URI (https://github.com/roelofrossouw/simply-cpp)"));
         CHECK(contains(file, "/FontFile")); // the font is embedded
         CHECK(contains(file, "/Subtype /Image"));
@@ -103,7 +103,7 @@ int main() {
         const auto file = read(path);
         CHECK(!objects_inside_streams(file));
         CHECK(contains(file, "/Count 4"));
-        CHECK(contains(file, "/MediaBox [ 0 0 612 792 ]"));
+        CHECK(contains(file, "/MediaBox [0 0 612 792]"));
         CHECK(contains(file, "/URI (https://example.com/one)"));
 
         const auto two_path = directory / "two.pdf"; // ending on a later page, with fonts on both
@@ -215,6 +215,7 @@ int main() {
         }
         const auto file = read(path);
         CHECK(contains(file, "/Encrypt"));
+        CHECK(contains(file, "/CFM /AESV3")); // AES-256
         CHECK(!contains(file, "(secret)"));
     }
 
@@ -271,7 +272,7 @@ int main() {
             sc::pdf second{std::move(first)};
             second.draw(sc::text{"Moved", {72, 72}});
         }
-        CHECK(read(path).starts_with("%PDF-1.4"));
+        CHECK(read(path).starts_with("%PDF-1.7"));
     }
 
     SECTION("Mistakes");
