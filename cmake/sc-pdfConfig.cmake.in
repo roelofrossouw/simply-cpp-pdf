@@ -4,7 +4,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/SimplyCppFunctions.cmake")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.10.0)
 # pdf.h's sc::canvas.
-find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 3.0.0)
+find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.0.2)
 # The static library links PDFHummus::PDFWriter; sc-graphics brings fontconfig.
 find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
 
