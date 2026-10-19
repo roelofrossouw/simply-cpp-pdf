@@ -32,7 +32,7 @@ namespace sc {
 
         // Starts the file with one page; every page has this size and orientation (page.h). Throws
         // std::runtime_error when the file can't be created.
-        explicit pdf(const std::filesystem::path &filename, page_size size = page_size::a4, orientation turned = orientation::portrait);
+        explicit pdf(const std::filesystem::path &filename, page_size size = page_size::A4, orientation turned = orientation::portrait);
 
         // The same, encrypted (128-bit RC4, as PDF 1.4 has it) with these passwords and rights.
         pdf(const std::filesystem::path &filename, page_size size, orientation turned, const protection &locked);

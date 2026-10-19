@@ -29,16 +29,16 @@ Fonts are found through fontconfig and embedded (subset). Curves and SVG stay
 vector graphics, and SVG clip paths clip. PDFHummus and fontconfig stay out
 of the headers.
 
-Pages are `sc::page_size::a3`, `a4` (the default), `a5`, `letter` or `legal`,
+Pages are `sc::page_size::A3`, `A4` (the default), `A5`, `letter` or `legal`,
 portrait or `sc::orientation::landscape` (both from sc-graphics' `page.h`,
-shared with sc-mupdf); `sc::page_size_from("a3")` reads a name, as from a
+shared with sc-mupdf); `sc::page_size_from("A3")` reads a name (in any case), as from a
 command line.
 
 ```cpp
 #include <pdf.h>
 
 sc::pdf pdf{"hello.pdf"};                                    // A4 portrait
-// sc::pdf wide{"wide.pdf", sc::page_size::a3, sc::orientation::landscape};   // 1191 x 842 points
+// sc::pdf wide{"wide.pdf", sc::page_size::A3, sc::orientation::landscape};   // 1191 x 842 points
 pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
 const sc::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
 pdf.draw(body);
@@ -64,7 +64,7 @@ Links can also go to a page of the file, bookmarks fill the reader's outline,
 and the document's information and passwords are set too:
 
 ```cpp
-sc::pdf locked{"report.pdf", sc::page_size::a4, sc::orientation::portrait,
+sc::pdf locked{"report.pdf", sc::page_size::A4, sc::orientation::portrait,
                {.user_password = "open", .owner_password = "admin", .print = true}};
 locked.metadata("Title", "Quarterly report");                // "Author", "Subject", "Keywords", ...
 locked.add_outline("Summary", 1);                            // a bookmark to page 1
@@ -87,7 +87,7 @@ in the bottom-right corner by its exact `bounds()`. sc-mupdf's
 runtime package (`simply-cpp-pdf`):
 
 ```text
-sc-pdf-demo [--size a4|a3|letter|legal] [--landscape] [--svg FILE] [OUTPUT]
+sc-pdf-demo [--size A3|A4|A5|letter|legal] [--landscape] [--svg FILE] [OUTPUT]
 ```
 
 ```bash
