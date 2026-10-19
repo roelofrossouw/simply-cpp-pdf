@@ -16,8 +16,9 @@ int main(int argc, char **argv) {
     // sc::params brings -h/--help, and reports mistakes and exits.
     const sc::params args{argc, argv, {
         {"name", "sc-pdf-demo"},
-        {"description", "Writes a page of text, shapes, SVG drawings and a link with PDFHummus (sc-mupdf-write writes the same "
-                        "with MuPDF)."},
+        {"description", "Writes a page of text, shapes, SVG drawings and a link with PDFHummus, to show what sc::pdf can "
+                        "draw. sc-mupdf-write writes the same page with MuPDF, if you'd like to compare the two."
+                        "\nMore on the wiki: https://github.com/roelofrossouw/simply-cpp/wiki/PDF"},
         {"options", {
             {"size", {{"default", "A4"}, {"choices", {"A3", "A4", "A5", "letter", "legal"}}, {"help", "the paper"}}},
             {"landscape", {{"type", "boolean"}, {"help", "turn the pages sideways"}}},
