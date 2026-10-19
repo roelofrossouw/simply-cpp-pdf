@@ -18,18 +18,13 @@ set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-# sc-pdf's own PDF writer (src/engine), which compresses with zlib and nothing else.
-find_package(ZLIB REQUIRED)
-
 # Everything PDFHummus is in src/, out of the installed headers. Fonts are found by sc-graphics'
-# sc::font_face. src/engine is sc-pdf's own writer, to replace PDFHummus.
+# sc::font_face.
 add_sc_object(pdf
         SOURCES src/font_collection.cpp src/font_collection.h
-        src/engine/objects.cpp src/engine/objects.h src/engine/content.cpp src/engine/content.h
-        src/engine/document.cpp src/engine/document.h
         INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src
-        LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter ZLIB::ZLIB
-        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter ZLIB::ZLIB)
+        LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter
+        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter)
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdf")
 
