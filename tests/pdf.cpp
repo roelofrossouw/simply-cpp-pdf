@@ -217,6 +217,35 @@ int main() {
         CHECK(!contains(file, "(secret)"));
     }
 
+    SECTION("Built-in fonts: nothing embedded, Adobe's widths");
+    {
+        const auto path = directory / "builtin.pdf";
+        const auto other = directory / "builtin-omega.pdf";
+        double width = 0;
+        {
+            sc::pdf pdf{path};
+            pdf.builtin_fonts(true);
+            CHECK(pdf.builtin_fonts());
+            const sc::text hello{"Hello, café €", {50, 80}, {"Helvetica", 20}};
+            pdf.draw(hello);
+            pdf.draw(sc::text{"Bold Times", {50, 120}, {"Times New Roman", 14, 700}});
+            width = pdf.text_width(sc::text{"Wai", {}, {"Helvetica", 10}});
+        }
+        CHECK_EQ(width, (944 + 556 + 222) * 10 / 1000.0); // Adobe's widths, whatever is installed
+        const auto file = read(path);
+        CHECK(contains(file, "/BaseFont /Helvetica"));
+        CHECK(contains(file, "/BaseFont /Times-Bold"));
+        CHECK(contains(file, "/Encoding /WinAnsiEncoding"));
+        CHECK(!contains(file, "/FontFile")); // nothing embedded
+        {
+            sc::pdf pdf{other};
+            pdf.builtin_fonts(true);
+            pdf.draw(sc::text{"Ohm: Ω", {50, 80}, {"Helvetica", 20}}); // Ω isn't in Windows-1252
+        }
+        CHECK(contains(read(other), "/FontFile")); // so that part is embedded
+        CHECK(!objects_inside_streams(read(other)));
+    }
+
     SECTION("Text measurements");
     {
         sc::pdf pdf{directory / "measure.pdf"};
