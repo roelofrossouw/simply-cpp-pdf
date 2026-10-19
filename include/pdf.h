@@ -13,9 +13,10 @@
 #include <string_view>
 
 namespace sc {
-    // A PDF file written with PDFHummus: an sc::canvas, drawn and measured with the same calls as an
+    // A PDF file written with sc-pdflite, simply-cpp's own PDF writer: an sc::canvas, drawn and measured with the same calls as an
     // sc::image, plus images and links. Positions are in points (1/72 inch) from the page's top-left
-    // corner, y down. A colour's alpha is honoured; fonts are found through fontconfig and embedded.
+    // corner, y down. A colour's alpha is honoured; fonts are found through fontconfig and embedded
+    // as subsets of the glyphs used.
     // Drawing goes to the current page: the newest, unless set_page() moved back. close() finishes
     // the file, or else the destructor, which can't report a failure.
     class pdf : public canvas {
@@ -34,7 +35,8 @@ namespace sc {
         // std::runtime_error when the file can't be created.
         explicit pdf(const std::filesystem::path &filename, page_size size = page_size::A4, orientation turned = orientation::portrait);
 
-        // The same, encrypted (128-bit RC4, as PDF 1.4 has it) with these passwords and rights.
+        // The same, encrypted (AES-256, as PDF 2.0 and Adobe's extension level 8 have it) with these
+        // passwords and rights.
         pdf(const std::filesystem::path &filename, page_size size, orientation turned, const protection &locked);
 
         ~pdf() override;
@@ -66,7 +68,7 @@ namespace sc {
 
         [[nodiscard]] double page_height() const;
 
-        // A JPEG, PNG or TIFF image, scaled to fit pos with its aspect ratio kept and centred in it.
+        // A JPEG or PNG image, scaled to fit pos with its aspect ratio kept and centred in it.
         // Throws std::runtime_error when the file can't be read as an image.
         void draw_image(const std::filesystem::path &filename, const rect &pos);
 

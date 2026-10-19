@@ -1,4 +1,4 @@
-// Writes a PDF with PDFHummus: text, shapes, SVG drawings, a half-transparent circle over the
+// Writes a PDF with sc::pdf (sc-pdflite underneath): text, shapes, SVG drawings, a half-transparent circle over the
 // boxes, a link, and a race track placed in the bottom-right corner by its bounds(). Each line shows
 // a call and what it returned. sc-mupdf-write draws the same page with MuPDF.
 
@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
     // sc::params brings -h/--help, and reports mistakes and exits.
     const sc::params args{argc, argv, {
         {"name", "sc-pdf-demo"},
-        {"description", "Writes a page of text, shapes, SVG drawings and a link with PDFHummus, to show what sc::pdf can "
+        {"description", "Writes a page of text, shapes, SVG drawings and a link with sc::pdf, to show what sc::pdf can "
                         "draw. sc-mupdf-write writes the same page with MuPDF, if you'd like to compare the two."
                         "\nMore on the wiki: https://github.com/roelofrossouw/simply-cpp/wiki/PDF"},
         {"options", {
@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
 
         sc::console::heading("Text: sc::text{content, where its baseline starts, sc::font}");
         SC_STEP(pdf.draw(sc::text{"simply-cpp pdf", {50, 90}, sc::font::bold("sans-serif", 32)}));
-        SC_STEP(pdf.draw(sc::text{"Text, shapes and SVG on PDFHummus", {50, 120}, {"serif", 14, 400, true}}));
+        SC_STEP(pdf.draw(sc::text{"Text, shapes and SVG on sc-pdflite", {50, 120}, {"serif", 14, 400, true}}));
         sc::text centred{"This line is centred on the page", {0, 150}}; // the default font, sans-serif 12
         SC_SHOW(pdf.text_width(centred));
         centred.position.x((pdf.page_width() - pdf.text_width(centred)) / 2);

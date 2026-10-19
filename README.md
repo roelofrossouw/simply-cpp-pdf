@@ -1,11 +1,12 @@
 # simply-cpp-pdf
 
 C++20 PDF writer: pages of text, shapes, paths, images, SVG drawings and
-links, on [PDFHummus](https://github.com/galkahana/PDF-Writer).
+links, written by [sc-pdflite](https://github.com/roelofrossouw/simply-cpp-pdflite),
+simply-cpp's own PDF writer (strict PDF 1.7).
 
 ## Licence, and the other engine
 
-**sc-pdf is Apache-2.0**, a permissive licence, as PDFHummus is: use it in
+**sc-pdf is Apache-2.0**, a permissive licence, as sc-pdflite is: use it in
 programs under any licence, closed-source and commercial included.
 
 [sc-mupdf](https://github.com/roelofrossouw/simply-cpp-mupdf) writes PDFs
@@ -26,8 +27,7 @@ text, paths and SVG are drawn with the same `draw()` calls as on an
 Positions are in points (1/72 inch) from the page's top-left corner, y down,
 as on a screen. A colour's alpha is honoured for fills, strokes and text.
 Fonts are found through fontconfig and embedded (subset). Curves and SVG stay
-vector graphics, and SVG clip paths clip. PDFHummus and fontconfig stay out
-of the headers.
+vector graphics, and SVG clip paths clip. Passwords encrypt with AES-256.
 
 Pages are `sc::page_size::A3`, `A4` (the default), `A5`, `letter` or `legal`,
 portrait or `sc::orientation::landscape` (both from sc-graphics' `page.h`,
@@ -47,7 +47,7 @@ pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::stroke{sc::color::Black, 0.
 pdf.draw(sc::rect{50, 130, 200, 80}, sc::color::Black);       // outline: stroke colour
 pdf.draw(sc::rounded_rect{sc::rect{300, 130, 200, 80}, 8}, {sc::color::Black, sc::color{0.9, 0.95, 1}}); // + fill
 pdf.draw(sc::circle{{400, 300}, 30}, sc::appearance::filled(sc::color{0, 0, 0, 0.5})); // half opaque
-pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG, PNG or TIFF, fitted
+pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG or PNG, fitted
 pdf.draw(sc::bitmap::load("photo.jpg"), {50, 350, 160, 120}); // PNG or JPEG, stretched; written once
 pdf.draw(sc::drawing::load_svg("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
 pdf.add_link("https://example.com", {50, 30, 120, 25});
@@ -116,7 +116,7 @@ SC_SHOW(pdf.page_height());
 
 sc::console::heading("Text: sc::text{content, where its baseline starts, sc::font}");
 SC_STEP(pdf.draw(sc::text{"simply-cpp pdf", {50, 90}, sc::font::bold("sans-serif", 32)}));
-SC_STEP(pdf.draw(sc::text{"Text, shapes and SVG on PDFHummus", {50, 120}, {"serif", 14, 400, true}}));
+SC_STEP(pdf.draw(sc::text{"Text, shapes and SVG on sc-pdflite", {50, 120}, {"serif", 14, 400, true}}));
 sc::text centred{"This line is centred on the page", {0, 150}}; // the default font, sans-serif 12
 SC_SHOW(pdf.text_width(centred));
 centred.position.x((pdf.page_width() - pdf.text_width(centred)) / 2);
@@ -215,9 +215,8 @@ SC_SHOW(std::filesystem::file_size(output)); // bytes
 
 ## Dependencies
 
-PDFHummus isn't packaged by Ubuntu or Homebrew, so
-[simply-cpp-pdfhummus](https://github.com/roelofrossouw/simply-cpp-pdfhummus)
-builds it from source for both. sc-graphics brings the canvas, page sizes and
+[sc-pdflite](https://github.com/roelofrossouw/simply-cpp-pdflite) writes the
+file, with zlib, FreeType (fonts, as subsets) and OpenSSL (passwords). sc-graphics brings the canvas, page sizes and
 SVG reading (through sc-web, on libxml2); fontconfig (finding fonts) comes from the system. A
 machine running a program needs some fonts installed; Ubuntu's fontconfig
 brings DejaVu.

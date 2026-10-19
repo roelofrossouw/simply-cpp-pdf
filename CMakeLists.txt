@@ -8,23 +8,19 @@ option(SC_PDF_BUILD_TESTS "Build simply-cpp-pdf tests" ${PROJECT_IS_TOP_LEVEL})
 get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.13.0)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.17.0)
 # sc::canvas, which pdf implements, and sc::drawing.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.2.0)
-# PDFHummus isn't in Ubuntu or Homebrew: sc-pdfhummus packages it for both.
-find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
+# The PDF itself is written by sc-pdflite.
+find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.0.0)
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-# Everything PDFHummus is in src/, out of the installed headers. Fonts are found by sc-graphics'
-# sc::font_face.
 add_sc_object(pdf
-        SOURCES src/font_collection.cpp src/font_collection.h
-        INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src
-        LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter
-        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics PDFHummus::PDFWriter)
+        LINK_LIBRARIES sc::sc-core sc::sc-graphics sc::sc-pdflite
+        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics sc::sc-pdflite)
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdf")
 
@@ -40,9 +36,5 @@ endif ()
 
 add_sc_example(sc-pdf-demo)
 
-# simply-cpp-pdfhummus is installed by hand, not found by dpkg-shlibdeps; PDFHummus's CMake package
-# looks for zlib, FreeType, libjpeg, libtiff, libpng and OpenSSL when a consumer configures.
 package_sc_module(
-        DEPENDS simply-cpp-pdfhummus
-        DEV_DEPENDS "simply-cpp-dev (>= 1.10.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" simply-cpp-pdfhummus
-        zlib1g-dev libfreetype-dev libjpeg-dev libtiff-dev libpng-dev libssl-dev)
+        DEV_DEPENDS "simply-cpp-dev (>= 1.17.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" "simply-cpp-pdflite-dev (>= 4.0.0~)")
