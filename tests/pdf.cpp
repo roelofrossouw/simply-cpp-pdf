@@ -146,6 +146,77 @@ int main() {
         CHECK(!objects_inside_streams(file));
     }
 
+    SECTION("Bitmaps: each written once, used from every page");
+    {
+        const auto path = directory / "bitmaps.pdf";
+        {
+            sc::pdf pdf{path};
+            const auto png = sc::bitmap::load("resource/image.png");
+            const auto jpeg = sc::bitmap::load("resource/image.jpg");
+            CHECK_NOTHROW(pdf.draw(png, {50, 50, 240, 160}));
+            CHECK_NOTHROW(pdf.draw(png, {300, 50, 120, 80})); // the same image again
+            CHECK_NOTHROW(pdf.draw(jpeg, {50, 300, 240, 160}));
+            pdf.new_page();
+            CHECK_NOTHROW(pdf.draw(sc::bitmap{png}, {50, 50, 240, 160})); // a copy: the same bytes
+            sc::drawing mirrored{{595, 842}};
+            mirrored.draw(jpeg, {50, 300, 240, 160});
+            mirrored.flip_horizontal();
+            CHECK_NOTHROW(pdf.draw(mirrored));
+        }
+        const auto file = read(path);
+        std::size_t images = 0;
+        for (auto at = file.find("/Subtype /Image"); at != std::string::npos; at = file.find("/Subtype /Image", at + 1)) ++images;
+        CHECK_EQ(images, std::size_t{3}); // the JPEG, the PNG (inside its form) and the PNG's alpha
+        CHECK(contains(file, "/SMask"));
+        CHECK(contains(file, "/DCTDecode")); // the JPEG as it is
+        CHECK(!objects_inside_streams(file));
+    }
+
+    SECTION("Links within the file, bookmarks and the document's information");
+    {
+        const auto path = directory / "outline.pdf";
+        {
+            sc::pdf pdf{path};
+            pdf.metadata("Title", "Quarterly report");
+            pdf.metadata("Author", "Zoë");
+            pdf.metadata("Department", "Sales");
+            pdf.add_outline("Summary", 1);
+            pdf.add_outline("Figures", 2, 100);
+            pdf.add_outline("By region", 2, 400, 1);
+            pdf.add_outline("Appendix", 3);
+            pdf.add_link(3, {50, 50, 100, 20}); // to a page not there yet
+            pdf.set_page(3);
+            pdf.add_link(1, {50, 50, 100, 20}, 200);
+            CHECK_THROWS_AS(pdf.add_link(0, {0, 0, 1, 1}), std::out_of_range);
+        }
+        const auto file = read(path);
+        CHECK(contains(file, "/Type /Outlines"));
+        CHECK(contains(file, "/PageMode /UseOutlines"));
+        CHECK(contains(file, "/Title (Summary)"));
+        CHECK(contains(file, "/Title (By region)"));
+        CHECK(contains(file, "/Subtype /Link"));
+        CHECK(contains(file, "/XYZ 0 642")); // 200 points down an 842-point page
+        CHECK(contains(file, "/Title (Quarterly report)"));
+        CHECK(contains(file, "/Department (Sales)"));
+        CHECK(!objects_inside_streams(file));
+
+        sc::pdf missing{directory / "missing.pdf"};
+        missing.add_link(5, {0, 0, 10, 10});
+        CHECK_THROWS_AS(missing.close(), std::out_of_range);
+    }
+
+    SECTION("Passwords");
+    {
+        const auto path = directory / "locked.pdf";
+        {
+            sc::pdf pdf{path, sc::page_size::a4, sc::orientation::portrait, {.user_password = "open", .owner_password = "own"}};
+            pdf.draw(sc::text{"secret", {50, 80}});
+        }
+        const auto file = read(path);
+        CHECK(contains(file, "/Encrypt"));
+        CHECK(!contains(file, "(secret)"));
+    }
+
     SECTION("Text measurements");
     {
         sc::pdf pdf{directory / "measure.pdf"};
