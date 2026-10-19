@@ -200,7 +200,7 @@ SC_SHOW(std::filesystem::file_size(output)); // bytes
 PDFHummus isn't packaged by Ubuntu or Homebrew, so
 [simply-cpp-pdfhummus](https://github.com/roelofrossouw/simply-cpp-pdfhummus)
 builds it from source for both. sc-graphics brings the canvas, page sizes and
-SVG reading (on tinyxml2); fontconfig (finding fonts) comes from the system. A
+SVG reading (through sc-web, on libxml2); fontconfig (finding fonts) comes from the system. A
 machine running a program needs some fonts installed; Ubuntu's fontconfig
 brings DejaVu.
 
