@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
         {"description", "Writes a page of text, shapes, SVG drawings and a link with PDFHummus (sc-mupdf-write writes the same "
                         "with MuPDF)."},
         {"options", {
-            {"size", {{"default", "a4"}, {"choices", {"a3", "a4", "letter", "legal"}}, {"help", "the paper"}}},
+            {"size", {{"default", "A4"}, {"choices", {"A3", "A4", "A5", "letter", "legal"}}, {"help", "the paper"}}},
             {"landscape", {{"type", "boolean"}, {"help", "turn the pages sideways"}}},
             {"svg", {{"value", "FILE"}, {"help", "an SVG file to draw on a page of its own"}}}}},
         {"positional", {

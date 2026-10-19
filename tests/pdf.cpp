@@ -116,10 +116,10 @@ int main() {
 
         sc::pdf legal{directory / "legal.pdf", sc::page_size::legal};
         CHECK_EQ(legal.page_height(), 1008.0);
-        sc::pdf a5{directory / "a5.pdf", sc::page_size::a5};
+        sc::pdf a5{directory / "a5.pdf", sc::page_size::A5};
         CHECK_EQ(a5.page_width(), 420.0);
         CHECK_EQ(a5.page_height(), 595.0);
-        sc::pdf wide{directory / "a3-landscape.pdf", sc::page_size::a3, sc::orientation::landscape};
+        sc::pdf wide{directory / "a3-landscape.pdf", sc::page_size::A3, sc::orientation::landscape};
         CHECK_EQ(wide.page_width(), 1191.0);
         CHECK_EQ(wide.page_height(), 842.0);
     }
@@ -209,7 +209,7 @@ int main() {
     {
         const auto path = directory / "locked.pdf";
         {
-            sc::pdf pdf{path, sc::page_size::a4, sc::orientation::portrait, {.user_password = "open", .owner_password = "own"}};
+            sc::pdf pdf{path, sc::page_size::A4, sc::orientation::portrait, {.user_password = "open", .owner_password = "own"}};
             pdf.draw(sc::text{"secret", {50, 80}});
         }
         const auto file = read(path);
