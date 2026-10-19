@@ -2,6 +2,8 @@
 
 #include "font_collection.h"
 
+#include <standard_font.h>
+
 #include <CatalogInformation.h>
 #include <DictionaryContext.h>
 #include <DocumentContextExtenderAdapter.h>
@@ -23,10 +25,12 @@
 #include FT_FREETYPE_H
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <iostream>
 #include <map>
 #include <optional>
+#include <string_view>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -60,6 +64,8 @@ namespace sc {
             std::map<ObjectIDType, std::string> alpha_names;
             // The images it uses, the same way.
             std::map<ObjectIDType, std::string> image_names;
+            // The built-in fonts it uses, the same way.
+            std::map<ObjectIDType, std::string> builtin_names;
         };
 
         // An image written into the file: a JPEG as an image XObject (a unit square), a PNG as the
@@ -91,6 +97,9 @@ namespace sc {
         };
         std::vector<bookmark> outline;
         std::map<std::string, std::string> info;
+        bool builtin = false;
+        // Each built-in font used, by its PDF name ("Helvetica-Bold"): its object, written by close().
+        std::map<std::string, ObjectIDType> builtin_fonts;
 
         // Puts the outline into the catalog when PDFHummus writes it.
         struct catalog_outline : DocumentContextExtenderAdapter {
@@ -370,6 +379,20 @@ namespace sc {
                 objects.EndDictionary(state);
                 objects.EndIndirectObject();
             }
+            for (const auto &[name, id]: builtin_fonts) {
+                objects.StartNewIndirectObject(id);
+                DictionaryContext *font = objects.StartDictionary();
+                font->WriteKey("Type");
+                font->WriteNameValue("Font");
+                font->WriteKey("Subtype");
+                font->WriteNameValue("Type1");
+                font->WriteKey("BaseFont");
+                font->WriteNameValue(name);
+                font->WriteKey("Encoding");
+                font->WriteNameValue("WinAnsiEncoding");
+                objects.EndDictionary(font);
+                objects.EndIndirectObject();
+            }
             if (writer.EndPDF() != PDFHummus::eSuccess || !written) throw std::runtime_error("sc::pdf: writing the file failed");
         }
     };
@@ -441,22 +464,101 @@ namespace sc {
         return impl_->height;
     }
 
+    namespace {
+        // UTF-8 text in pieces: Windows-1252's (as its bytes) and the rest (as UTF-8), in order.
+        struct piece {
+            std::string text;  // Windows-1252 bytes when encoded, else UTF-8
+            std::string utf8;
+            bool encoded;
+        };
+
+        std::vector<piece> pieces_of(const std::string_view text) {
+            std::vector<piece> out;
+            for (std::size_t i = 0; i < text.size();) {
+                const auto first = static_cast<unsigned char>(text[i]);
+                const std::size_t length = first < 0x80 ? 1 : (first >> 5) == 6 ? 2 : (first >> 4) == 14 ? 3 : (first >> 3) == 30 ? 4 : 1;
+                char32_t code = length == 1 ? first : first & (0x7F >> length);
+                for (std::size_t k = 1; k < length && i + k < text.size(); ++k) code = (code << 6) | (static_cast<unsigned char>(text[i + k]) & 0x3F);
+                const auto byte = standard_font::encode(code);
+                const bool encoded = byte.has_value();
+                if (out.empty() || out.back().encoded != encoded) out.push_back({{}, {}, encoded});
+                if (encoded) out.back().text += *byte;
+                else out.back().text.append(text.substr(i, length));
+                out.back().utf8.append(text.substr(i, length));
+                i += length;
+            }
+            return out;
+        }
+    }
+
     double pdf::measure_width(const text &sample) {
+        if (impl_->builtin) {
+            if (const auto standard = standard_font::of(sample.font)) {
+                double width = 0;
+                for (const auto &each: pieces_of(sample.content))
+                    width += each.encoded ? standard->width(each.utf8, sample.font.size)
+                                          : impl_->fonts.get(sample.font)->CalculateTextAdvance(each.text, sample.font.size);
+                return width;
+            }
+        }
         return impl_->fonts.get(sample.font)->CalculateTextAdvance(sample.content, sample.font.size);
     }
 
     double pdf::measure_x_height(const font &font) {
+        if (impl_->builtin)
+            if (const auto standard = standard_font::of(font)) return standard->x_height(font.size);
         PDFUsedFont *used = impl_->fonts.get(font);
         return glyph_height(used, used->GetFreeTypeFont()->GetxHeight(), 'x', font.size);
     }
 
     double pdf::measure_cap_height(const font &font) {
+        if (impl_->builtin)
+            if (const auto standard = standard_font::of(font)) return standard->cap_height(font.size);
         PDFUsedFont *used = impl_->fonts.get(font);
         return glyph_height(used, used->GetFreeTypeFont()->GetCapHeight(), 'H', font.size);
     }
 
+    void pdf::builtin_fonts(const bool on) { impl_->builtin = on; }
+
+    bool pdf::builtin_fonts() const { return impl_->builtin; }
+
     void pdf::paint_text(const text &sample, const sc::fill &fill) {
         auto &content = impl_->content();
+        if (impl_->builtin) {
+            if (const auto standard = standard_font::of(sample.font)) {
+                // The built-in font for what Windows-1252 has, placed by Adobe's widths; the
+                // installed font (embedded) for the rest.
+                auto &state = impl_->pages[impl_->current];
+                auto id = impl_->builtin_fonts.find(standard->name());
+                if (id == impl_->builtin_fonts.end())
+                    id = impl_->builtin_fonts.emplace(standard->name(), impl_->writer.GetObjectsContext().GetInDirectObjectsRegistry().AllocateNewObjectID()).first;
+                auto resource = state.builtin_names.find(id->second);
+                if (resource == state.builtin_names.end())
+                    resource = state.builtin_names.emplace(id->second, state.page->GetResourcesDictionary().AddFontMapping(id->second)).first;
+                double x = sample.position.x();
+                content.q();
+                impl_->set_alpha(content, fill.colour().alpha(), 1);
+                content.rg(fill.colour().red(), fill.colour().green(), fill.colour().blue());
+                for (const auto &each: pieces_of(sample.content)) {
+                    content.BT();
+                    if (each.encoded) {
+                        content.TfLow(resource->second, sample.font.size);
+                        content.Td(x, impl_->y(sample.position.y()));
+                        content.TjHexLow(each.text);
+                        x += standard->width(each.utf8, sample.font.size);
+                    } else {
+                        PDFUsedFont *installed = impl_->fonts.get(sample.font);
+                        content.Tf(installed, sample.font.size);
+                        content.Td(x, impl_->y(sample.position.y()));
+                        content.Tj(each.text);
+                        x += installed->CalculateTextAdvance(each.text, sample.font.size);
+                    }
+                    content.ET();
+                }
+                content.Q();
+                return;
+            }
+        }
         PDFUsedFont *used = impl_->fonts.get(sample.font);
         content.q();
         impl_->set_alpha(content, fill.colour().alpha(), 1);

@@ -81,6 +81,15 @@ namespace sc {
         // deeper level under the bookmark before it. Bookmarks keep the order they're added in.
         void add_outline(const std::string &title, unsigned page, double top = 0, int level = 0);
 
+        // Text in Helvetica, Times or Courier (any case; Arial, Times New Roman and Courier New
+        // too), bold and italic as asked, is written in PDF's built-in fonts, which every reader has:
+        // nothing embedded, smaller files. It's placed and measured with Adobe's metrics for them
+        // (sc::standard_font), so it fits as readers draw it. Characters outside Windows-1252, which
+        // the built-in fonts are written in, are drawn in the installed font, embedded. Off by default.
+        void builtin_fonts(bool on);
+
+        [[nodiscard]] bool builtin_fonts() const;
+
         // Sets the document's information: "Title", "Author", "Subject", "Keywords", "Creator",
         // "Producer" or a key of your own (UTF-8), as sc::mupdf::document::metadata() reads it.
         void metadata(const std::string &key, const std::string &value);

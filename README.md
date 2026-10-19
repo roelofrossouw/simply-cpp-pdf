@@ -60,6 +60,11 @@ destructor finishes an unclosed file but can only print a failure.
 `set_page(n)` goes back to an earlier page (or adds pages up to `n`), so
 things like "page 1 of 3" can be filled in at the end.
 
+`pdf.builtin_fonts(true)` writes text in Helvetica, Times or Courier (Arial, Times New Roman
+and Courier New too) in PDF's built-in fonts, which every reader has: nothing embedded, smaller
+files. It's placed and measured with Adobe's metrics (sc-graphics' `sc::standard_font`), so it fits
+as readers draw it; characters outside Windows-1252 are embedded from the installed font.
+
 Links can also go to a page of the file, bookmarks fill the reader's outline,
 and the document's information and passwords are set too:
 
