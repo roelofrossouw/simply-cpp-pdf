@@ -2,13 +2,22 @@
 
 #include "font_collection.h"
 
+#include <CatalogInformation.h>
 #include <DictionaryContext.h>
+#include <DocumentContextExtenderAdapter.h>
+#include <EncryptionOptions.h>
+#include <InfoDictionary.h>
 #include <ObjectsContext.h>
 #include <PDFPage.h>
+#include <InputStringStream.h>
+#include <PDFFormXObject.h>
+#include <PDFImageXObject.h>
 #include <PDFUsedFont.h>
 #include <PDFWriter.h>
+#include <PDFTextString.h>
 #include <PageContentContext.h>
 #include <ResourcesDictionary.h>
+#include <TrailerInformation.h>
 #include <XObjectContentContext.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -17,6 +26,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -39,8 +49,25 @@ namespace sc {
             PageContentContext *content;
             // PDFHummus attaches links to the next page it writes, so they wait here until then.
             std::vector<std::pair<std::string, rect> > links;
+            // Links within the file, to a page and a height on it, written after every page is.
+            struct jump {
+                rect area;
+                unsigned page;
+                double top;
+            };
+            std::vector<jump> jumps;
             // The ExtGStates the page uses, by their names in its resources.
             std::map<ObjectIDType, std::string> alpha_names;
+            // The images it uses, the same way.
+            std::map<ObjectIDType, std::string> image_names;
+        };
+
+        // An image written into the file: a JPEG as an image XObject (a unit square), a PNG as the
+        // form XObject PDFHummus makes of it (its size in pixels).
+        struct written_image {
+            sc::bitmap bitmap; // held, so its bytes' address isn't another's
+            ObjectIDType id;
+            bool form;
         };
 
         PDFWriter writer;
@@ -54,14 +81,48 @@ namespace sc {
         // taken while drawing, the objects are written by close(), as nothing may be written while a
         // page's content is open.
         std::map<std::pair<double, double>, ObjectIDType> alpha_states;
+        // Each bitmap written once, by its bytes (copies share them), and used from any page.
+        std::map<const std::string *, written_image> images;
+        struct bookmark {
+            std::string title;
+            unsigned page;
+            double top;
+            int level;
+        };
+        std::vector<bookmark> outline;
+        std::map<std::string, std::string> info;
 
-        impl(const std::filesystem::path &filename, const page_size size, const orientation turned) {
+        // Puts the outline into the catalog when PDFHummus writes it.
+        struct catalog_outline : DocumentContextExtenderAdapter {
+            ObjectIDType root = 0;
+
+            PDFHummus::EStatusCode OnCatalogWrite(CatalogInformation *, DictionaryContext *catalog, ObjectsContext *, PDFHummus::DocumentContext *) override {
+                if (root == 0) return PDFHummus::eSuccess;
+                catalog->WriteKey("Outlines");
+                catalog->WriteObjectReferenceValue(root);
+                catalog->WriteKey("PageMode");
+                catalog->WriteNameValue("UseOutlines");
+                return PDFHummus::eSuccess;
+            }
+        } outline_writer;
+
+        impl(const std::filesystem::path &filename, const page_size size, const orientation turned, const std::optional<protection> &locked = {}) {
             const auto page = page_dimensions(size, turned);
             width = page.width();
             height = page.height();
-            if (writer.StartPDF(filename.string(), ePDFVersion14, LogConfiguration::DefaultLogConfiguration(),
-                                PDFCreationSettings(true, true)) != PDFHummus::eSuccess)
+            PDFCreationSettings settings(true, true);
+            if (locked && (!locked->user_password.empty() || !locked->owner_password.empty())) {
+                // The permission bits (PDF 32000, table 22): 3 print, 4 modify, 5 copy, 12 print well.
+                long long rights = 0;
+                if (locked->print) rights |= 1 << 2 | 1 << 11;
+                if (locked->edit) rights |= 1 << 3;
+                if (locked->copy) rights |= 1 << 4;
+                const auto &owner = locked->owner_password.empty() ? locked->user_password : locked->owner_password;
+                settings = PDFCreationSettings(true, true, EncryptionOptions(locked->user_password, rights, owner));
+            }
+            if (writer.StartPDF(filename.string(), ePDFVersion14, LogConfiguration::DefaultLogConfiguration(), settings) != PDFHummus::eSuccess)
                 throw std::runtime_error("sc::pdf: can't create " + filename.string());
+            writer.GetDocumentContext().AddDocumentContextExtender(&outline_writer);
             add_page();
         }
 
@@ -89,6 +150,102 @@ namespace sc {
             if (name == page.alpha_names.end())
                 name = page.alpha_names.emplace(state->second, page.page->GetResourcesDictionary().AddExtGStateMapping(state->second)).first;
             content.gs(name->second);
+        }
+
+        // The outline's items, each pointing at its parent, siblings and first and last children,
+        // with the root (named in the catalog) over the outermost ones.
+        template<typename Destination>
+        void write_outline(const Destination &destination, const std::size_t page_count) {
+            if (outline.empty()) return;
+            auto &objects = writer.GetObjectsContext();
+            auto &registry = objects.GetInDirectObjectsRegistry();
+            const std::size_t count = outline.size();
+            std::vector<ObjectIDType> ids(count);
+            for (auto &id: ids) id = registry.AllocateNewObjectID();
+            const ObjectIDType root = registry.AllocateNewObjectID();
+            // Each item's parent: the nearest item before it at a shallower level, else the root.
+            std::vector<std::optional<std::size_t> > parent(count);
+            std::vector<std::size_t> open; // the items still taking children, outermost first
+            for (std::size_t i = 0; i < count; ++i) {
+                while (!open.empty() && outline[open.back()].level >= outline[i].level) open.pop_back();
+                if (!open.empty()) parent[i] = open.back();
+                open.push_back(i);
+            }
+            const auto children_of = [&](const std::optional<std::size_t> &of) {
+                std::vector<std::size_t> out;
+                for (std::size_t i = 0; i < count; ++i)
+                    if (parent[i] == of) out.push_back(i);
+                return out;
+            };
+            for (std::size_t i = 0; i < count; ++i) {
+                const auto &item = outline[i];
+                if (item.page == 0 || item.page > page_count) throw std::out_of_range("sc::pdf: a bookmark to page " + std::to_string(item.page) + ", which isn't there");
+                const auto siblings = children_of(parent[i]);
+                const auto at = std::ranges::find(siblings, i) - siblings.begin();
+                const auto children = children_of(i);
+                objects.StartNewIndirectObject(ids[i]);
+                DictionaryContext *entry = objects.StartDictionary();
+                PDFTextString title;
+                title.FromUTF8(item.title);
+                entry->WriteKey("Title");
+                entry->WriteLiteralStringValue(title.ToString());
+                entry->WriteKey("Parent");
+                entry->WriteObjectReferenceValue(parent[i] ? ids[*parent[i]] : root);
+                if (at > 0) {
+                    entry->WriteKey("Prev");
+                    entry->WriteObjectReferenceValue(ids[siblings[at - 1]]);
+                }
+                if (at + 1 < static_cast<std::ptrdiff_t>(siblings.size())) {
+                    entry->WriteKey("Next");
+                    entry->WriteObjectReferenceValue(ids[siblings[at + 1]]);
+                }
+                if (!children.empty()) {
+                    entry->WriteKey("First");
+                    entry->WriteObjectReferenceValue(ids[children.front()]);
+                    entry->WriteKey("Last");
+                    entry->WriteObjectReferenceValue(ids[children.back()]);
+                    entry->WriteKey("Count");
+                    entry->WriteIntegerValue(-static_cast<long long>(children.size())); // closed
+                }
+                destination(entry, item.page, item.top);
+                objects.EndDictionary(entry);
+                objects.EndIndirectObject();
+            }
+            const auto top_level = children_of(std::nullopt);
+            objects.StartNewIndirectObject(root);
+            DictionaryContext *outlines = objects.StartDictionary();
+            outlines->WriteKey("Type");
+            outlines->WriteNameValue("Outlines");
+            outlines->WriteKey("First");
+            outlines->WriteObjectReferenceValue(ids[top_level.front()]);
+            outlines->WriteKey("Last");
+            outlines->WriteObjectReferenceValue(ids[top_level.back()]);
+            outlines->WriteKey("Count");
+            outlines->WriteIntegerValue(static_cast<long long>(top_level.size()));
+            objects.EndDictionary(outlines);
+            objects.EndIndirectObject();
+            outline_writer.root = root;
+        }
+
+        // The bitmap written into the file, the first time it's drawn. Throws std::runtime_error
+        // when PDFHummus can't read it.
+        const written_image &image(const sc::bitmap &picture) {
+            if (const auto found = images.find(&picture.bytes()); found != images.end()) return found->second;
+            pause(); // the image is written now, outside the page's content
+            InputStringStream stream{picture.bytes()};
+            written_image result{picture, 0, picture.type() == bitmap::format::png};
+            if (result.form) {
+                PDFFormXObject *form = writer.CreateFormXObjectFromPNGStream(&stream);
+                if (!form) throw std::runtime_error("sc::pdf: can't read the PNG image");
+                result.id = form->GetObjectID();
+                delete form;
+            } else {
+                PDFImageXObject *image = writer.CreateImageXObjectFromJPGStream(&stream);
+                if (!image) throw std::runtime_error("sc::pdf: can't read the JPEG image");
+                result.id = image->GetImageObjectID();
+                delete image;
+            }
+            return images.emplace(&picture.bytes(), std::move(result)).first->second;
         }
 
         // Fills (by the fill's rule) and/or strokes what path() writes; whichever is none is left out.
@@ -134,14 +291,73 @@ namespace sc {
             // open then, or those objects land inside it.
             pause();
             bool written = true;
+            auto &objects = writer.GetObjectsContext();
+            auto &registry = objects.GetInDirectObjectsRegistry();
+            // Links within the file name pages written later, so their objects come after the
+            // pages; each page is told of its own now.
+            struct pending_jump {
+                ObjectIDType id;
+                impl::page_state::jump jump;
+            };
+            std::vector<pending_jump> jumps;
+            std::vector<ObjectIDType> page_ids;
             for (auto &state: pages) {
                 written = writer.EndPageContentContext(state.content) == PDFHummus::eSuccess && written;
                 for (const auto &[url, area]: state.links)
                     writer.AttachURLLinktoCurrentPage(url, PDFRectangle(area.left(), y(area.bottom()), area.right(), y(area.top())));
-                written = writer.WritePageAndRelease(state.page) == PDFHummus::eSuccess && written;
+                for (const auto &jump: state.jumps) {
+                    const ObjectIDType id = registry.AllocateNewObjectID();
+                    writer.GetDocumentContext().RegisterAnnotationReferenceForNextPageWrite(id);
+                    jumps.push_back({id, jump});
+                }
+                const auto [status, id] = writer.WritePageAndReturnPageID(state.page);
+                written = status == PDFHummus::eSuccess && written;
+                page_ids.push_back(id);
+                delete state.page;
             }
             pages.clear();
-            auto &objects = writer.GetObjectsContext();
+            // [page 0 R /XYZ left top null]: the page, from that height, at the reader's zoom.
+            const auto destination = [&](DictionaryContext *dictionary, const unsigned page, const double top) {
+                dictionary->WriteKey("Dest");
+                objects.StartArray();
+                objects.WriteIndirectObjectReference(page_ids.at(page - 1));
+                objects.WriteName("XYZ");
+                objects.WriteInteger(0);
+                objects.WriteDouble(y(top));
+                objects.WriteKeyword("null");
+                objects.EndArray(eTokenSeparatorEndLine);
+            };
+            for (const auto &[id, jump]: jumps) {
+                if (jump.page == 0 || jump.page > page_ids.size()) throw std::out_of_range("sc::pdf: a link to page " + std::to_string(jump.page) + ", which isn't there");
+                objects.StartNewIndirectObject(id);
+                DictionaryContext *link = objects.StartDictionary();
+                link->WriteKey("Type");
+                link->WriteNameValue("Annot");
+                link->WriteKey("Subtype");
+                link->WriteNameValue("Link");
+                link->WriteKey("Rect");
+                link->WriteRectangleValue(PDFRectangle(jump.area.left(), y(jump.area.bottom()), jump.area.right(), y(jump.area.top())));
+                link->WriteKey("Border");
+                objects.StartArray();
+                for (int i = 0; i < 3; ++i) objects.WriteInteger(0);
+                objects.EndArray(eTokenSeparatorEndLine);
+                destination(link, jump.page, jump.top);
+                objects.EndDictionary(link);
+                objects.EndIndirectObject();
+            }
+            write_outline(destination, page_ids.size());
+            for (const auto &[key, value]: info) {
+                auto &dictionary = writer.GetDocumentContext().GetTrailerInformation().GetInfo();
+                PDFTextString text;
+                text.FromUTF8(value);
+                if (key == "Title") dictionary.Title = text;
+                else if (key == "Author") dictionary.Author = text;
+                else if (key == "Subject") dictionary.Subject = text;
+                else if (key == "Keywords") dictionary.Keywords = text;
+                else if (key == "Creator") dictionary.Creator = text;
+                else if (key == "Producer") dictionary.Producer = text;
+                else dictionary.AddAdditionalInfoEntry(key, text);
+            }
             for (const auto &[alphas, id]: alpha_states) {
                 objects.StartNewIndirectObject(id);
                 DictionaryContext *state = objects.StartDictionary();
@@ -160,6 +376,10 @@ namespace sc {
 
     pdf::pdf(const std::filesystem::path &filename, const page_size size, const orientation turned)
         : impl_(std::make_unique<impl>(filename, size, turned)) {
+    }
+
+    pdf::pdf(const std::filesystem::path &filename, const page_size size, const orientation turned, const protection &locked)
+        : impl_(std::make_unique<impl>(filename, size, turned, locked)) {
     }
 
     pdf::~pdf() {
@@ -312,6 +532,26 @@ namespace sc {
         if (content.DrawImage(x, y, file, options) != PDFHummus::eSuccess) throw std::runtime_error("sc::pdf: can't draw the image " + file);
     }
 
+    void pdf::paint_bitmap(const bitmap &picture, const transform &placement) {
+        impl_->check_open();
+        const auto &written = impl_->image(picture);
+        auto &state = impl_->pages[impl_->current];
+        auto name = state.image_names.find(written.id);
+        if (name == state.image_names.end()) {
+            auto &resources = state.page->GetResourcesDictionary();
+            name = state.image_names.emplace(written.id, written.form ? resources.AddFormXObjectMapping(written.id)
+                                                                       : resources.AddImageXObjectMapping(written.id)).first;
+        }
+        auto &content = impl_->content();
+        // The unit square, y up in PDF, through placement (y down from the top) onto the page.
+        const auto &m = placement;
+        content.q();
+        content.cm(m.a(), -m.b(), -m.c(), m.d(), m.c() + m.e(), impl_->height - m.d() - m.f());
+        if (written.form) content.cm(1 / picture.size().width(), 0, 0, 1 / picture.size().height(), 0, 0);
+        content.Do(name->second);
+        content.Q();
+    }
+
     namespace {
         // Writes shape's steps into content, y flipped to PDF's.
         void trace(PageContentContext &content, const path &shape, const double page_height) {
@@ -348,5 +588,22 @@ namespace sc {
     void pdf::add_link(const std::string &url, const rect &pos) {
         impl_->check_open();
         impl_->pages[impl_->current].links.emplace_back(url, pos);
+    }
+
+    void pdf::add_link(const unsigned page, const rect &pos, const double top) {
+        impl_->check_open();
+        if (page == 0) throw std::out_of_range("sc::pdf::add_link: pages count from 1");
+        impl_->pages[impl_->current].jumps.push_back({pos, page, top});
+    }
+
+    void pdf::add_outline(const std::string &title, const unsigned page, const double top, const int level) {
+        impl_->check_open();
+        if (page == 0) throw std::out_of_range("sc::pdf::add_outline: pages count from 1");
+        impl_->outline.push_back({title, page, top, std::max(0, level)});
+    }
+
+    void pdf::metadata(const std::string &key, const std::string &value) {
+        impl_->check_open();
+        impl_->info[key] = value;
     }
 }
