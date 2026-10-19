@@ -48,6 +48,7 @@ pdf.draw(sc::rect{50, 130, 200, 80}, sc::color::Black);       // outline: stroke
 pdf.draw(sc::rounded_rect{sc::rect{300, 130, 200, 80}, 8}, {sc::color::Black, sc::color{0.9, 0.95, 1}}); // + fill
 pdf.draw(sc::circle{{400, 300}, 30}, sc::appearance::filled(sc::color{0, 0, 0, 0.5})); // half opaque
 pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG, PNG or TIFF, fitted
+pdf.draw(sc::bitmap::load("photo.jpg"), {50, 350, 160, 120}); // PNG or JPEG, stretched; written once
 pdf.draw(sc::drawing::load_svg("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
 pdf.add_link("https://example.com", {50, 30, 120, 25});
 pdf.new_page();
@@ -58,6 +59,18 @@ pdf.close();                                                 // or let the destr
 destructor finishes an unclosed file but can only print a failure.
 `set_page(n)` goes back to an earlier page (or adds pages up to `n`), so
 things like "page 1 of 3" can be filled in at the end.
+
+Links can also go to a page of the file, bookmarks fill the reader's outline,
+and the document's information and passwords are set too:
+
+```cpp
+sc::pdf locked{"report.pdf", sc::page_size::a4, sc::orientation::portrait,
+               {.user_password = "open", .owner_password = "admin", .print = true}};
+locked.metadata("Title", "Quarterly report");                // "Author", "Subject", "Keywords", ...
+locked.add_outline("Summary", 1);                            // a bookmark to page 1
+locked.add_outline("By region", 2, 400, 1);                  // page 2, 400 points down, nested
+locked.add_link(2, {50, 30, 120, 25});                       // to page 2 (it needn't exist yet)
+```
 
 `sc::drawing` (sc-graphics) holds shapes and text as data, and reads and
 writes SVG: paths, the basic shapes, text, groups, transforms, clip paths,

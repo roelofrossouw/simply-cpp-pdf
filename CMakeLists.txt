@@ -10,7 +10,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.10.0)
 # sc::canvas, which pdf implements, and sc::drawing.
-find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 5.1.0)
+find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 5.3.0)
 # PDFHummus isn't in Ubuntu or Homebrew: sc-pdfhummus packages it for both.
 find_or_install_package(PDFHummus simply-cpp-pdfhummus simply-cpp-pdfhummus)
 
@@ -44,5 +44,5 @@ add_sc_example(sc-pdf-demo)
 # looks for zlib, FreeType, libjpeg, libtiff, libpng and OpenSSL when a consumer configures.
 package_sc_module(
         DEPENDS simply-cpp-pdfhummus
-        DEV_DEPENDS "simply-cpp-dev (>= 1.10.0~)" "simply-cpp-graphics-dev (>= 5.1.0~)" simply-cpp-pdfhummus
+        DEV_DEPENDS "simply-cpp-dev (>= 1.10.0~)" "simply-cpp-graphics-dev (>= 5.3.0~)" simply-cpp-pdfhummus
         zlib1g-dev libfreetype-dev libjpeg-dev libtiff-dev libpng-dev libssl-dev)
