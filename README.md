@@ -38,7 +38,7 @@ command line.
 #include <pdf.h>
 
 sc::pdf pdf{"hello.pdf"};                                    // A4 portrait
-// sc::pdf wide{"wide.pdf", sc::page_size::A3, sc::orientation::landscape};   // 1191 x 842 points
+// sc::pdf wide{"wide.pdf", sc::page_size::A3, sc::orientation::landscape};   // 420 x 297 mm
 pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
 const sc::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
 pdf.draw(body);

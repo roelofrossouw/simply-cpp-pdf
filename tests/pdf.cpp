@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -47,8 +48,8 @@ int main() {
         {
             sc::pdf pdf{path};
             CHECK_EQ(pdf.page_count(), 1u);
-            CHECK_EQ(pdf.page_width(), 595.0);
-            CHECK_EQ(pdf.page_height(), 842.0);
+            CHECK_NEAR(pdf.page_width(), 595.2756, 1e-4); // A4: 210 x 297 mm
+            CHECK_NEAR(pdf.page_height(), 841.8898, 1e-4);
 
             CHECK_NOTHROW(pdf.draw(sc::text{"Hello, PDF", {50, 80}, {"sans-serif", 24}}));
             CHECK_NOTHROW(pdf.draw(sc::text{"Bold and blue", {50, 110}, sc::font::bold("sans-serif", 14)}, sc::color{0, 0, 1}));
@@ -75,7 +76,7 @@ int main() {
         CHECK(file.starts_with("%PDF-1.4"));
         CHECK(contains(file, "%%EOF"));
         CHECK(contains(file, "/Count 1"));
-        CHECK(contains(file, "/MediaBox [ 0 0 595 842 ]"));
+        CHECK(std::regex_search(file, std::regex{R"(/MediaBox \[ 0 0 595\.27\d* 841\.88\d* \])"}));
         CHECK(contains(file, "/URI (https://github.com/roelofrossouw/simply-cpp)"));
         CHECK(contains(file, "/FontFile")); // the font is embedded
         CHECK(contains(file, "/Subtype /Image"));
@@ -117,11 +118,11 @@ int main() {
         sc::pdf legal{directory / "legal.pdf", sc::page_size::legal};
         CHECK_EQ(legal.page_height(), 1008.0);
         sc::pdf a5{directory / "a5.pdf", sc::page_size::A5};
-        CHECK_EQ(a5.page_width(), 420.0);
-        CHECK_EQ(a5.page_height(), 595.0);
+        CHECK_NEAR(a5.page_width(), 419.5276, 1e-4); // 148 x 210 mm
+        CHECK_NEAR(a5.page_height(), 595.2756, 1e-4);
         sc::pdf wide{directory / "a3-landscape.pdf", sc::page_size::A3, sc::orientation::landscape};
-        CHECK_EQ(wide.page_width(), 1191.0);
-        CHECK_EQ(wide.page_height(), 842.0);
+        CHECK_NEAR(wide.page_width(), 1190.5512, 1e-4); // 420 x 297 mm
+        CHECK_NEAR(wide.page_height(), 841.8898, 1e-4);
     }
 
     SECTION("Transparency: a colour's alpha");
@@ -195,7 +196,7 @@ int main() {
         CHECK(contains(file, "/Title (Summary)"));
         CHECK(contains(file, "/Title (By region)"));
         CHECK(contains(file, "/Subtype /Link"));
-        CHECK(contains(file, "/XYZ 0 642")); // 200 points down an 842-point page
+        CHECK(contains(file, "/XYZ 0 641.88")); // 200 points down an A4 page, 841.89 points high
         CHECK(contains(file, "/Title (Quarterly report)"));
         CHECK(contains(file, "/Department (Sales)"));
         CHECK(!objects_inside_streams(file));
