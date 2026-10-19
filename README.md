@@ -222,6 +222,18 @@ SVG reading (through sc-web, on libxml2); fontconfig (finding fonts) comes from 
 machine running a program needs some fonts installed; Ubuntu's fontconfig
 brings DejaVu.
 
+## Our own writer (in progress)
+
+`src/engine/` is sc-pdf's own PDF writer, which will replace PDFHummus: strict ISO 32000-1
+(PDF 1.7), with no library but zlib. So far it writes the file structure (objects, the
+cross-reference table, trailer and ID), pages with compressed content streams, PDF's built-in
+fonts and the document information; images, links, bookmarks and embedded fonts (through
+FreeType) follow. `sc::pdf` still writes with PDFHummus until it covers everything.
+
+Its tests check the files it writes byte by byte, and with every PDF checker that's installed:
+`check-qpdf` (`qpdf --check`), `check-pdfcpu` (`pdfcpu validate -m strict`) and `check-mutool`
+(mutool draws every page, warning-free); one that isn't installed is left out.
+
 ## Building locally
 
 Run `bash scripts/install.sh` to configure, build, test, package, and install.
