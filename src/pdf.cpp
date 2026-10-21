@@ -2,10 +2,10 @@
 
 #include <pdflite.h>
 #include <standard_font.h>
+#include <utf8.h>
 
 #include <algorithm>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -52,14 +52,12 @@ namespace sc {
             page.state(document.graphics_state(std::clamp(fill_alpha, 0.0, 1.0), std::clamp(stroke_alpha, 0.0, 1.0)));
         }
 
-        // Fills (by the fill's rule) and/or strokes what path() writes; whichever is none is left out.
-        template<typename Path>
-        void paint(const sc::appearance &look, Path path) {
+        // Fills (by the fill's rule) and/or strokes shape; whichever is none is left out.
+        void paint(const sc::appearance &look, const sc::path &shape) {
             const auto &stroke = look.stroke();
             const auto &fill = look.fill();
             auto &page = content();
             const bool stroked = stroke.visible(), filled = fill.visible();
-            const bool even_odd = fill.rule() == fill_rule::even_odd;
             page.save();
             set_alpha(page, filled ? fill.colour().alpha() : 1, stroked ? stroke.colour().alpha() : 1);
             if (filled) page.fill_colour(fill.colour().red(), fill.colour().green(), fill.colour().blue());
@@ -67,11 +65,8 @@ namespace sc {
                 page.line_width(stroke.width());
                 page.stroke_colour(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
             }
-            path(page);
-            if (stroked && filled) page.fill_and_stroke(even_odd);
-            else if (filled) page.fill(even_odd);
-            else if (stroked) page.stroke();
-            else page.end_path();
+            page.path(shape);
+            page.paint(filled, stroked, fill.rule() == fill_rule::even_odd);
             page.restore();
         }
 
@@ -97,30 +92,11 @@ namespace sc {
         impl_->document.protect({locked.user_password, locked.owner_password, allowed});
     }
 
-    pdf::~pdf() {
-        if (!impl_) return;
-        try {
-            impl_->document.close();
-        } catch (const std::exception &error) {
-            std::cerr << error.what() << '\n';
-        }
-    }
+    pdf::~pdf() = default;
 
     pdf::pdf(pdf &&) noexcept = default;
 
-    pdf &pdf::operator=(pdf &&other) noexcept {
-        if (this != &other) {
-            if (impl_) {
-                try {
-                    impl_->document.close();
-                } catch (const std::exception &error) {
-                    std::cerr << error.what() << '\n';
-                }
-            }
-            impl_ = std::move(other.impl_);
-        }
-        return *this;
-    }
+    pdf &pdf::operator=(pdf &&) noexcept = default;
 
     void pdf::close() {
         impl_->document.close();
@@ -165,10 +141,7 @@ namespace sc {
         std::vector<piece> pieces_of(const std::string_view text) {
             std::vector<piece> out;
             for (std::size_t i = 0; i < text.size();) {
-                const auto first = static_cast<unsigned char>(text[i]);
-                const std::size_t length = first < 0x80 ? 1 : (first >> 5) == 6 ? 2 : (first >> 4) == 14 ? 3 : (first >> 3) == 30 ? 4 : 1;
-                char32_t code = length == 1 ? first : first & (0x7F >> length);
-                for (std::size_t k = 1; k < length && i + k < text.size(); ++k) code = (code << 6) | (static_cast<unsigned char>(text[i + k]) & 0x3F);
+                const auto [code, length, valid] = utf8::decode(text, i);
                 const auto byte = standard_font::encode(code);
                 const bool encoded = byte.has_value();
                 if (out.empty() || out.back().encoded != encoded) out.push_back({{}, {}, encoded});
@@ -247,50 +220,19 @@ namespace sc {
     }
 
     void pdf::paint_line(const line &shape, const sc::stroke &stroke) {
-        impl_->paint(stroke, [&](pdflite::content &content) {
-            content.move(shape.from().x(), shape.from().y());
-            content.line(shape.to().x(), shape.to().y());
-        });
+        impl_->paint(stroke, to_path(shape));
     }
 
     void pdf::paint_rounded_rect(const rounded_rect &shape, const sc::appearance &look) {
-        const rect box = shape.rect();
-        const double radius = shape.radius();
-        const double left = box.left(), right = box.right(), top = box.top(), bottom = box.bottom();
-        impl_->paint(look, [&](pdflite::content &content) {
-            const double control = radius * (1 - quarter_circle); // from the corner
-            content.move(left + radius, top);
-            content.line(right - radius, top);
-            content.curve(right - control, top, right, top + control, right, top + radius);
-            content.line(right, bottom - radius);
-            content.curve(right, bottom - control, right - control, bottom, right - radius, bottom);
-            content.line(left + radius, bottom);
-            content.curve(left + control, bottom, left, bottom - control, left, bottom - radius);
-            content.line(left, top + radius);
-            content.curve(left, top + control, left + control, top, left + radius, top);
-            content.close_path();
-        });
+        impl_->paint(look, to_path(shape));
     }
 
     void pdf::paint_circle(const circle &shape, const sc::appearance &look) {
-        const double x = shape.center().x(), y = shape.center().y(), r = shape.radius();
-        const double k = r * quarter_circle; // control point distance from the end points (sc-core's path.h)
-        impl_->paint(look, [&](pdflite::content &content) {
-            content.move(x + r, y);
-            content.curve(x + r, y + k, x + k, y + r, x, y + r);
-            content.curve(x - k, y + r, x - r, y + k, x - r, y);
-            content.curve(x - r, y - k, x - k, y - r, x, y - r);
-            content.curve(x + k, y - r, x + r, y - k, x + r, y);
-            content.close_path();
-        });
+        impl_->paint(look, to_path(shape));
     }
 
     void pdf::paint_polygon(const polygon &shape, const sc::appearance &look) {
-        impl_->paint(look, [&](pdflite::content &content) {
-            content.move(shape[0].x(), shape[0].y());
-            for (std::size_t i = 1; i < shape.size(); ++i) content.line(shape[i].x(), shape[i].y());
-            content.close_path();
-        });
+        impl_->paint(look, to_path(shape));
     }
 
     void pdf::draw_image(const std::filesystem::path &filename, const rect &pos) {
@@ -303,10 +245,10 @@ namespace sc {
             found = impl_->files.emplace(filename, impl::picture(std::move(bytes))).first;
         }
         const auto &picture = *found->second;
-        const auto [image_width, image_height] = std::pair{picture.size().width(), picture.size().height()};
-        if (image_width <= 0 || image_height <= 0) throw std::runtime_error("sc::pdf: can't read the image " + filename.string());
-        const double scale = std::min(pos.width() / image_width, pos.height() / image_height);
-        const double w = image_width * scale, h = image_height * scale;
+        const auto natural = picture.size();
+        if (natural.width() <= 0 || natural.height() <= 0) throw std::runtime_error("sc::pdf: can't read the image " + filename.string());
+        const double scale = std::min(pos.width() / natural.width(), pos.height() / natural.height());
+        const double w = natural.width() * scale, h = natural.height() * scale;
         const rect where{pos.left() + (pos.width() - w) / 2, pos.top() + (pos.height() - h) / 2, w, h};
         impl_->content().draw(impl_->document.image(picture), where);
     }
@@ -319,30 +261,14 @@ namespace sc {
         impl_->content().draw(impl_->document.image(*found->second.second), placement);
     }
 
-    namespace {
-        // Writes shape's steps into content.
-        void trace(pdflite::content &content, const path &shape) {
-            for (const auto &step: shape.steps()) {
-                switch (step.type) {
-                    case path::kind::move: content.move(step.to.x(), step.to.y()); break;
-                    case path::kind::line: content.line(step.to.x(), step.to.y()); break;
-                    case path::kind::cubic:
-                        content.curve(step.first.x(), step.first.y(), step.second.x(), step.second.y(), step.to.x(), step.to.y());
-                        break;
-                    case path::kind::close: content.close_path(); break;
-                }
-            }
-        }
-    }
-
     void pdf::paint_path(const path &shape, const sc::appearance &look) {
-        impl_->paint(look, [&](pdflite::content &content) { trace(content, shape); });
+        impl_->paint(look, shape);
     }
 
     void pdf::push_clip(const path &shape) {
         auto &content = impl_->content();
         content.save();
-        trace(content, shape);
+        content.path(shape);
         content.clip(); // nonzero, as canvas::push_clip() clips
         content.end_path();
     }
