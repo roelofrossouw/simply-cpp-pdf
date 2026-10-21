@@ -127,7 +127,7 @@ namespace sc {
         void paint_path(const path &shape, const sc::appearance &look) override;
 
     public:
-        // Clips are nonzero and nest (and make SVG clip paths work).
+        // Clips are nonzero and nest.
         void push_clip(const path &shape) override;
 
         void pop_clip() override;

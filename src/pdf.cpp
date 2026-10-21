@@ -24,7 +24,6 @@ namespace sc {
         std::map<std::tuple<std::string, int, bool, std::string>, pdflite::font> fonts;
         // Each bitmap read once, by its bytes (copies share them), held so their address isn't another's.
         std::map<const std::string *, std::pair<sc::bitmap, std::shared_ptr<const pdflite::image> > > bitmaps;
-        // Each image file read once.
         std::map<std::filesystem::path, std::shared_ptr<const pdflite::image> > files;
 
         impl(const std::filesystem::path &filename, const page_size size, const orientation turned) : document(filename, size, turned) {
