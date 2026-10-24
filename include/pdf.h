@@ -92,6 +92,12 @@ namespace sc {
 
         [[nodiscard]] bool builtin_fonts() const;
 
+        // Writes PNG pictures at most about pixels_per_inch at the biggest size they're drawn: one
+        // with more than 1.5 times that is scaled down (sc::pdflite::document::image_resolution()).
+        // JPEGs are written as they are. 0, the default, keeps every picture as it is. Throws
+        // std::invalid_argument for a negative or non-finite resolution.
+        void image_resolution(double pixels_per_inch);
+
         // Sets the document's information: "Title", "Author", "Subject", "Keywords", "Creator",
         // "Producer" or a key of your own (UTF-8), as sc::mupdf::document::metadata() reads it.
         void metadata(const std::string &key, const std::string &value);
@@ -108,7 +114,8 @@ namespace sc {
 
         void paint_text(const text &sample, const sc::fill &fill) override;
 
-        // Each bitmap is written into the file once, a JPEG as it is, and used from every page.
+        // Each bitmap is written into the file once (one of the same bytes as another counts as
+        // it), a JPEG as it is, and used from every page.
         // Throws std::runtime_error when it can't be read.
         void paint_bitmap(const bitmap &picture, const transform &placement) override;
 
