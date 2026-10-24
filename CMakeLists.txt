@@ -12,7 +12,7 @@ find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.20.0)
 # sc::canvas, which pdf implements, and sc::drawing.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.3.0)
 # The PDF itself is written by sc-pdflite.
-find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.2.0)
+find_or_install_package(sc-pdflite simply-cpp-pdflite-dev simply-cpp-pdflite 4.5.0)
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
