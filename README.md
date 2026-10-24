@@ -65,6 +65,10 @@ and Courier New too) in PDF's built-in fonts, which every reader has: nothing em
 files. It's placed and measured with Adobe's metrics (sc-graphics' `sc::standard_font`), so it fits
 as readers draw it; characters outside Windows-1252 are embedded from the installed font.
 
+Each bitmap is written into the file once, and so is another of the same bytes.
+`pdf.image_resolution(150)` writes PNGs at most about 150 pixels an inch at the biggest size
+they're drawn, scaling bigger ones down; JPEGs are written as they are.
+
 Links can also go to a page of the file, bookmarks fill the reader's outline,
 and the document's information and passwords are set too:
 

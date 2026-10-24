@@ -5,6 +5,7 @@
 #include <utf8.h>
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -182,6 +183,8 @@ namespace sc {
 
     bool pdf::builtin_fonts() const { return impl_->builtin; }
 
+    void pdf::image_resolution(const double pixels_per_inch) { impl_->document.image_resolution(pixels_per_inch); }
+
     void pdf::paint_text(const text &sample, const sc::fill &fill) {
         auto &content = impl_->content();
         auto &document = impl_->document;
@@ -249,7 +252,7 @@ namespace sc {
         const double scale = std::min(pos.width() / natural.width(), pos.height() / natural.height());
         const double w = natural.width() * scale, h = natural.height() * scale;
         const rect where{pos.left() + (pos.width() - w) / 2, pos.top() + (pos.height() - h) / 2, w, h};
-        impl_->content().draw(impl_->document.image(picture), where);
+        impl_->content().draw(impl_->document.image(picture, sc::size_<distance>{w, h}), where);
     }
 
     void pdf::paint_bitmap(const bitmap &picture, const transform &placement) {
@@ -257,7 +260,9 @@ namespace sc {
         auto found = impl_->bitmaps.find(&picture.bytes());
         if (found == impl_->bitmaps.end())
             found = impl_->bitmaps.emplace(&picture.bytes(), std::pair{picture, impl::picture(picture.bytes())}).first;
-        impl_->content().draw(impl_->document.image(*found->second.second), placement);
+        // Its unit square's sides, as drawn: what a lower resolution goes by.
+        const sc::size_<distance> shown{std::hypot(placement.a(), placement.b()), std::hypot(placement.c(), placement.d())};
+        impl_->content().draw(impl_->document.image(*found->second.second, shown), placement);
     }
 
     void pdf::paint_path(const path &shape, const sc::appearance &look) {
