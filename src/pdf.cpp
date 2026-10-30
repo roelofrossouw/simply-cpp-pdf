@@ -272,7 +272,10 @@ namespace sc {
     void pdf::push_clip(const path &shape) {
         auto &content = impl_->content();
         content.save();
-        content.path(shape);
+        // An empty shape clips everything away (html2pdf asks for one where nothing of an area is
+        // left on a page): a rectangle of no size, since PDF clips only to a path.
+        if (shape.empty()) content.rectangle({}, {}, {}, {});
+        else content.path(shape);
         content.clip(); // nonzero, as canvas::push_clip() clips
         content.end_path();
     }

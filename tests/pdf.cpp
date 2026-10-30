@@ -125,6 +125,19 @@ int main() {
         CHECK_NEAR(wide.page_height(), 841.8898, 1e-4);
     }
 
+    SECTION("Clipping to an empty shape hides what's drawn, rather than failing");
+    {
+        const auto path = directory / "empty-clip.pdf";
+        {
+            sc::pdf pdf{path};
+            pdf.push_clip(sc::path{});
+            pdf.draw(sc::text{"hidden", {72, 72}});
+            pdf.pop_clip();
+            pdf.draw(sc::text{"shown", {72, 100}});
+        }
+        CHECK(!objects_inside_streams(read(path))); // written whole: push_clip() didn't throw
+    }
+
     SECTION("Transparency: a colour's alpha");
     {
         const auto path = directory / "alpha.pdf";
