@@ -1,5 +1,7 @@
 # simply-cpp-pdf
 
+> **Retired 2026-11-17:** merged into sc-pdflite as `sc::pdflite::writer` (`<sc/pdflite/writer.h>`). This repository is archived; see [simply-cpp-pdflite](https://github.com/roelofrossouw/simply-cpp-pdflite).
+
 C++20 PDF writer: pages of text, shapes, paths, images, SVG drawings and
 links, written by [sc-pdflite](https://github.com/roelofrossouw/simply-cpp-pdflite),
 simply-cpp's own PDF writer (strict PDF 1.7).
