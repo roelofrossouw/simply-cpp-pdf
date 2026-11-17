@@ -1,6 +1,6 @@
 // Writes PDFs into the temporary directory and checks what the files hold: pages, sizes, links,
 // fonts, images and SVG drawings, plus the mistakes that throw.
-#include "pdf.h"
+#include <sc/pdf/pdf.h>
 
 #include "sc_test.h"
 

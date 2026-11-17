@@ -7,10 +7,10 @@
 #include <string>
 #include <utility>
 
-#include <params.h>
-#include <sc.h>
+#include <sc/core/params.h>
+#include <sc/core/sc.h>
 
-#include <pdf.h>
+#include <sc/pdf/pdf.h>
 
 int main(int argc, char **argv) {
     // sc::params brings -h/--help, and reports mistakes and exits.

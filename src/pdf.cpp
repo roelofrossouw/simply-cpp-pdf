@@ -1,8 +1,8 @@
-#include "pdf.h"
+#include <sc/pdf/pdf.h>
 
-#include <pdflite.h>
-#include <standard_font.h>
-#include <utf8.h>
+#include <sc/pdflite/pdflite.h>
+#include <sc/graphics/standard_font.h>
+#include <sc/core/utf8.h>
 
 #include <algorithm>
 #include <cmath>

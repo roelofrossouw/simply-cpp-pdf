@@ -35,7 +35,7 @@ shared with sc-mupdf); `sc::page_size_from("A3")` reads a name (in any case), as
 command line.
 
 ```cpp
-#include <pdf.h>
+#include <sc/pdf/pdf.h>
 
 sc::pdf pdf{"hello.pdf"};                                    // A4 portrait
 // sc::pdf wide{"wide.pdf", sc::page_size::A3, sc::orientation::landscape};   // 420 x 297 mm
